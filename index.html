@@ -77,6 +77,8 @@ textarea { min-height: 96px; }
 .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
 .sheet { background: var(--bg); width: 100%; max-width: 760px; max-height: 92vh; overflow: auto; border-radius: 16px 16px 0 0; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
 .sheet h2 { margin-top: 0; }
+.pk-head { position: sticky; top: -16px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg); margin: -16px -16px 8px; padding: 12px 16px 8px; border-bottom: 1px solid var(--line); }
+.pk-head h2 { margin: 0; }
 .photos { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
 .photos .p { position: relative; flex: none; }
 .photos img { height: 150px; border-radius: 10px; display: block; }
@@ -988,12 +990,22 @@ function moveEvent(id, dir) {
   Promise.all([saveRow('events', { id: e.id, order: String(oo) }, e.updatedAt), saveRow('events', { id: o.id, order: String(oe) }, o.updatedAt)]).then(render)
     .catch(function (er) { toast('並べ替えできませんでした：' + (er.message || er)); });
 }
-function openPick(date) {
+// 候補から選ぶ：ジャンル（種別）で絞り込める。「閉じる」は一番上（スクロールしても見える）
+function openPick(date, kind) {
+  kind = kind || '';
   var evs = live('events').filter(function (e) { return e.day === date; }), linked = {};
   evs.forEach(function (e) { if (e.noteId) linked[e.noteId] = 1; });
-  var cands = live('notes').filter(function (n) { return n.status !== '却下' && !linked[n.id] && (n.day === date || !n.day); });
-  openSheet('<h2>候補から選ぶ</h2>' + (cands.map(function (n) { return noteCard(n, '<div style="margin-top:6px"><button class="btn small primary" data-act="assign" data-note="' + esc(n.id) + '" data-date="' + date + '">この日に追加</button></div>'); }).join('') || '<p class="muted">候補の付箋がありません。</p>') +
-    '<div class="row" style="margin-top:12px"><button class="btn" id="pk_close">閉じる</button></div>');
+  var all = live('notes').filter(function (n) { return n.status !== '却下' && !linked[n.id] && (n.day === date || !n.day); });
+  var count = {};
+  all.forEach(function (n) { count[n.kind] = (count[n.kind] || 0) + 1; });
+  var cands = kind ? all.filter(function (n) { return n.kind === kind; }) : all;
+  var chip = function (k, label, num) {
+    return '<button class="chip' + (k === kind ? ' on' : '') + '" data-act="pickKind" data-date="' + date + '" data-kind="' + esc(k) + '" aria-pressed="' + (k === kind) + '">' + esc(label) + '（' + num + '）</button>';
+  };
+  openSheet('<div class="pk-head"><h2>候補から選ぶ</h2><button class="btn" id="pk_close">閉じる</button></div>' +
+    '<div class="chips" role="group" aria-label="ジャンル" style="margin-bottom:8px">' + chip('', 'すべて', all.length) +
+      NOTE_KINDS.filter(function (k) { return count[k]; }).map(function (k) { return chip(k, k, count[k]); }).join('') + '</div>' +
+    (cands.map(function (n) { return noteCard(n, '<div style="margin-top:6px"><button class="btn small primary" data-act="assign" data-note="' + esc(n.id) + '" data-date="' + date + '">この日に追加</button></div>'); }).join('') || '<p class="muted">候補の付箋がありません。</p>'));
   document.getElementById('pk_close').onclick = closeSheet;
 }
 
@@ -1046,6 +1058,7 @@ document.addEventListener('click', function (ev) {
   else if (a === 'evUp') moveEvent(id, -1);
   else if (a === 'evDown') moveEvent(id, 1);
   else if (a === 'pick') openPick(b.dataset.date);
+  else if (a === 'pickKind') openPick(b.dataset.date, b.dataset.kind);
   else if (a === 'assign') {
     var date = b.dataset.date, n = noteById(b.dataset.note);
     closeSheet();
