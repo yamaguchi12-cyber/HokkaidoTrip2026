@@ -17,12 +17,12 @@
 .leaflet-container { font: inherit; }
 :root {
   --bg: #f4f6f8; --surface: #ffffff; --ink: #1d2733; --muted: #5a6776; --line: #d5dce3;
-  --accent: #1f4e79; --accent-ink: #ffffff; --warn: #8a4b00; --warn-bg: #fff3e0; --danger: #b3261e;
+  --accent: #1f4e79; --accent-ink: #ffffff; --warn: #8a4b00; --warn-bg: #fff3e0; --danger: #b3261e; --hi: #b3261e; --lo: #1f5f8b;
   --k-food: #fde7d6; --k-sight: #dcefdc; --k-stay: #e3e0f5; --k-move: #e2e8ee; --k-shop: #fbe3ef; --k-other: #f1ecd5;
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #11161c; --surface: #1b232c; --ink: #e8edf2; --muted: #a2afbd; --line: #33404d; --accent: #8cc2f0; --accent-ink: #0b1620;
-    --warn: #ffcc80; --warn-bg: #3a2a10; --danger: #ff8a80;
+    --warn: #ffcc80; --warn-bg: #3a2a10; --danger: #ff8a80; --hi: #ff8a80; --lo: #8cc2f0;
     --k-food: #4a3324; --k-sight: #243d27; --k-stay: #302d4d; --k-move: #2a343e; --k-shop: #4a2a3b; --k-other: #3c3921; }
 }
 * { box-sizing: border-box; }
@@ -79,6 +79,25 @@ textarea { min-height: 96px; }
 .sheet h2 { margin-top: 0; }
 .pk-head { position: sticky; top: -16px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg); margin: -16px -16px 8px; padding: 12px 16px 8px; border-bottom: 1px solid var(--line); }
 .pk-head h2 { margin: 0; }
+.wx { padding: 12px; }
+.wx-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.wx-head .grow { min-width: 0; }
+.wx-head b { font-size: 16px; }
+.wx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.wx-p { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.wx-name { font-size: 14px; color: var(--muted); font-weight: 700; }
+.wx-main { margin: 2px 0 4px; }
+.wx-ic { display: block; font-size: 30px; line-height: 1.3; white-space: nowrap; }
+.wx-lb { display: block; font-size: 16px; font-weight: 700; line-height: 1.4; }
+.wx-t { font-size: 24px; font-weight: 700; line-height: 1.3; }
+.wx-t .hi { color: var(--hi); } .wx-t .lo { color: var(--lo); } .wx-t .sl { color: var(--muted); font-weight: 400; margin: 0 4px; }
+.wx-pop { font-size: 14px; margin-top: 2px; }
+.wx-bar { display: block; height: 6px; border-radius: 3px; background: var(--line); margin: 4px 0; overflow: hidden; }
+.wx-bar i { display: block; height: 100%; background: var(--accent); }
+.wx-sun { font-size: 14px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+.wx-msg { font-size: 14px; color: var(--muted); margin: 4px 0; }
+.wx-note { font-size: 14px; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 6px 10px; margin-top: 8px; }
+.wx-src { font-size: 13px; color: var(--muted); }
 .photos { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
 .photos .p { position: relative; flex: none; }
 .photos img { height: 150px; border-radius: 10px; display: block; }
@@ -272,6 +291,46 @@ function parseOgp(html, baseUrl) {
   var image = absUrl_(metas['og:image'] || metas['twitter:image'] || '', baseUrl);
   if (!title && !description && !image) return null;
   return { title: title, description: description, image: image };
+}
+
+// ---------- 天気（settings の weather:YYYY-MM-DD） ----------
+// value は JSON {src, places:[{name,label,max,min,pop,rel,sunrise,sunset,msg}], notes:[…]}。昔の自由記述はそのまま notes に入れる
+function parseWeather(value) {
+  var w = { src: '', places: [], notes: [] };
+  var s = String(value == null ? '' : value).trim();
+  if (!s) return w;
+  if (s.charAt(0) === '{') {
+    try {
+      var o = JSON.parse(s);
+      if (o && typeof o === 'object') {
+        w.src = String(o.src || '');
+        w.places = Array.isArray(o.places) ? o.places.filter(function (p) { return p && typeof p === 'object'; }) : [];
+        w.notes = Array.isArray(o.notes) ? o.notes.map(String) : (o.notes ? [String(o.notes)] : []);
+        return w;
+      }
+    } catch (e) { /* 自由記述として扱う */ }
+  }
+  w.notes = [s];
+  return w;
+}
+
+// 天気の言葉から絵文字（「くもり一時雪」→ ☁️❄️、「雪時々晴れ」→ ❄️☀️）
+function weatherIcons(label) {
+  var s = String(label || '');
+  var ic = function (t) { if (/雪/.test(t)) return '❄️'; if (/雨|みぞれ/.test(t)) return '🌧️'; if (/くもり|曇/.test(t)) return '☁️'; if (/晴/.test(t)) return '☀️'; return ''; };
+  var m = /(時々|一時|のち|後)/.exec(s);
+  if (!m) return ic(s) || '🌡️';
+  var a = ic(s.slice(0, m.index)), b = ic(s.slice(m.index + m[0].length));
+  return a && b && a !== b ? a + b : (a || b || '🌡️');
+}
+
+// ホームの1行表示（例：☁️❄️ 札幌 くもり一時雪 4/-1℃ 60%）
+function weatherSummary(w) {
+  var p = w.places && w.places[0];
+  if (p && !p.label && p.msg) return '予報はまだ出ていません';
+  if (!p || !p.label) return w.notes && w.notes[0] ? String(w.notes[0]).slice(0, 30) : '';
+  var t = (p.max !== undefined && p.max !== '' ? p.max : '') + '/' + (p.min !== undefined && p.min !== '' ? p.min : '') + '℃';
+  return weatherIcons(p.label) + ' ' + (p.name || '') + ' ' + p.label + ' ' + t + (p.pop !== undefined && p.pop !== '' ? ' ' + p.pop + '%' : '');
 }
 
 // ---------- 行の扱い ----------
@@ -576,7 +635,27 @@ function noteCard(n, extra) {
     (n.summary ? '<div class="sm">' + esc(n.summary) + '</div>' : '') + (extra || '') + '</div></a>';
 }
 function dayIndex(date) { return TRIP_DAYS.indexOf(date); }
-function weatherMemo(date) { var r = S.rows.settings.filter(function (x) { return x.id === 'weather:' + date; })[0]; return r ? r.value : ''; }
+function weatherRaw(date) { var r = S.rows.settings.filter(function (x) { return x.id === 'weather:' + date; })[0]; return r ? r.value : ''; }
+function weatherMemo(date) { return weatherSummary(parseWeather(weatherRaw(date))); }
+// 天気予報サイトのような見た目：場所ごとに、絵文字・天気・最高/最低気温・降水確率・日の出/日の入
+function weatherPlace(p) {
+  var h = '<div class="wx-p"><div class="wx-name">' + esc(p.name || '') + '</div>';
+  if (p.label) h += '<div class="wx-main"><span class="wx-ic" aria-hidden="true">' + weatherIcons(p.label) + '</span><span class="wx-lb">' + esc(p.label) + '</span></div>';
+  var hasT = (p.max !== undefined && p.max !== '') || (p.min !== undefined && p.min !== '');
+  if (hasT) h += '<div class="wx-t" aria-label="最高' + esc(p.max) + '度、最低' + esc(p.min) + '度"><span class="hi">' + esc(p.max) + '℃</span><span class="sl">/</span><span class="lo">' + esc(p.min) + '℃</span></div>';
+  if (p.pop !== undefined && p.pop !== '') h += '<div class="wx-pop">降水確率 <b>' + esc(p.pop) + '%</b>' + (p.rel ? '　<span class="badge">信頼度 ' + esc(p.rel) + '</span>' : '') + '<span class="wx-bar" aria-hidden="true"><i style="width:' + Math.max(0, Math.min(100, Number(p.pop) || 0)) + '%"></i></span></div>';
+  if (p.msg) h += '<div class="wx-msg">' + esc(p.msg) + '</div>';
+  if (p.sunrise || p.sunset) h += '<div class="wx-sun"><div>🌅 日の出 ' + esc(p.sunrise || '—') + '</div><div>🌇 日の入 ' + esc(p.sunset || '—') + '</div></div>';
+  return h + '</div>';
+}
+function weatherCard(date) {
+  var w = parseWeather(weatherRaw(date));
+  var h = '<section class="card wx" aria-label="天気予報"><div class="wx-head"><b>天気予報</b>' + '<span class="grow">' + (w.src ? '<span class="wx-src">' + esc(w.src) + '</span>' : '') + '</span><button class="btn small" data-act="weather" data-date="' + date + '">メモ編集</button></div>';
+  if (w.places.length) h += '<div class="wx-grid">' + w.places.map(weatherPlace).join('') + '</div>';
+  else if (!w.notes.length) h += '<div class="muted">未入力</div>';
+  h += w.notes.map(function (n) { return '<div class="wx-note">' + esc(n) + '</div>'; }).join('');
+  return h + '</section>';
+}
 
 // ---------- 画面 ----------
 function render() {
@@ -622,7 +701,7 @@ function viewHome() {
   DAY_LABELS.forEach(function (d, i) {
     var evs = live('events').filter(function (e) { return e.day === d.date; });
     h += '<a class="card" style="display:block;text-decoration:none;color:inherit" href="#/day/' + (i + 1) + '"><b>' + d.md + '（' + d.wd + '）</b> ' + esc(d.route) +
-      '<div class="muted">予定 ' + evs.length + ' 件' + (weatherMemo(d.date) ? ' ／ ' + esc(weatherMemo(d.date)) : '') + '</div></a>';
+      '<div class="muted">予定 ' + evs.length + ' 件' + (weatherMemo(d.date) ? '<br>' + esc(weatherMemo(d.date)) : '') + '</div></a>';
   });
   h += '<h2>付箋</h2><a class="card" style="display:block;text-decoration:none;color:inherit" href="#/notes"><b>付箋ボード</b>　' + notes.length + ' 枚' +
     '<div class="muted">候補・保留 ' + cand + ' 枚 ／ <span style="font-weight:700">要補強 ' + boost + ' 枚</span>' + (open ? ' ／ 未決事項 ' + open + ' 件' : '') + '</div></a>';
@@ -639,8 +718,7 @@ function viewDay(i) {
   var a = analyzeDay(evs, nm, 90);
   var h = '<div class="row"><a class="btn" href="#/day/' + (i === 0 ? 1 : i) + '"' + (i === 0 ? ' aria-disabled="true"' : '') + '>← 前日</a><div class="grow"></div><a class="btn" href="#/day/' + (i === 2 ? 3 : i + 2) + '"' + (i === 2 ? ' aria-disabled="true"' : '') + '>翌日 →</a></div>';
   h += '<h2 style="margin-top:12px">' + d.md + '（' + d.wd + '）' + esc(d.route) + '</h2>';
-  var wm = weatherMemo(d.date);
-  h += '<div class="card row"><div class="grow muted">天気・日の出日没メモ：' + (wm ? '<span style="color:var(--ink)">' + esc(wm) + '</span>' : '未記入') + '</div><button class="btn small" data-act="weather" data-date="' + d.date + '">編集</button></div>';
+  h += weatherCard(d.date);
   h += '<div class="tl">';
   a.timed.forEach(function (r) {
     if (r.gapBefore) h += '<div class="gap">空き時間 ' + Math.floor(r.gapBefore / 60) + '時間' + (r.gapBefore % 60 ? (r.gapBefore % 60) + '分' : '') + '　<button class="btn small" data-act="pick" data-date="' + d.date + '">候補から選ぶ ▼</button></div>';
@@ -1067,10 +1145,11 @@ document.addEventListener('click', function (ev) {
     document.getElementById('e_kind').value = n.kind;
   }
   else if (a === 'weather') {
-    var cur = weatherMemo(b.dataset.date), v = prompt('天気・日の出日没などのメモ（例：日の出 6:30／日没 16:05／雪）', cur);
+    var wd = parseWeather(weatherRaw(b.dataset.date)), v = prompt('注意・メモ（複数あるときは「／」で区切る。例：路面凍結に注意／冬用タイヤ）', wd.notes.join('／'));
     if (v === null) return;
     var existing = S.rows.settings.filter(function (x) { return x.id === 'weather:' + b.dataset.date; })[0];
-    saveRow('settings', { id: 'weather:' + b.dataset.date, value: v }, existing ? existing.updatedAt : undefined).then(render);
+    var nv = JSON.stringify({ src: wd.src, places: wd.places, notes: v.split(/／/).map(function (t) { return t.trim(); }).filter(Boolean) });
+    saveRow('settings', { id: 'weather:' + b.dataset.date, value: nv }, existing ? existing.updatedAt : undefined).then(render);
   }
   else if (a === 'mapDay') { S.mapDay = b.dataset.day; S.fitted = false; updateMap(); }
   else if (a === 'mapUnsel') { delete S.mapSel[id]; updateMap(); }
