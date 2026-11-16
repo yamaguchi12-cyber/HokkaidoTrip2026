@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1f4e79">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>北海道旅行2026</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+#mapbox { height: 52vh; min-height: 280px; border-radius: 12px; border: 1px solid var(--line); margin: 8px 0; z-index: 0; }
+.leaflet-container { font: inherit; }
+:root {
+  --bg: #f4f6f8; --surface: #ffffff; --ink: #1d2733; --muted: #5a6776; --line: #d5dce3;
+  --accent: #1f4e79; --accent-ink: #ffffff; --warn: #8a4b00; --warn-bg: #fff3e0; --danger: #b3261e;
+  --k-food: #fde7d6; --k-sight: #dcefdc; --k-stay: #e3e0f5; --k-move: #e2e8ee; --k-shop: #fbe3ef; --k-other: #f1ecd5;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #11161c; --surface: #1b232c; --ink: #e8edf2; --muted: #a2afbd; --line: #33404d; --accent: #8cc2f0; --accent-ink: #0b1620;
+    --warn: #ffcc80; --warn-bg: #3a2a10; --danger: #ff8a80;
+    --k-food: #4a3324; --k-sight: #243d27; --k-stay: #302d4d; --k-move: #2a343e; --k-shop: #4a2a3b; --k-other: #3c3921; }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.7 -apple-system, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: underline; }
+header.top { position: sticky; top: 0; z-index: 5; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; gap: 8px; padding: 8px 16px; padding-top: calc(8px + env(safe-area-inset-top)); }
+header.top h1 { font-size: 18px; margin: 0; flex: 1; line-height: 1.4; }
+header.top button { background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 8px; min-height: 44px; min-width: 44px; padding: 0 12px; cursor: pointer; }
+main { max-width: 760px; margin: 0 auto; padding: 16px; }
+h2 { font-size: 18px; margin: 24px 0 8px; line-height: 1.5; }
+h3 { font-size: 16px; margin: 16px 0 6px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin: 8px 0; }
+.muted { color: var(--muted); font-size: 14px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; text-decoration: none; color: var(--ink); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.btn.small { min-height: 44px; padding: 0 12px; font-size: 15px; }
+.badge { display: inline-block; font-size: 13px; line-height: 1.5; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); margin-right: 4px; }
+.badge.warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); font-weight: 700; }
+.badge.ok { border-color: var(--accent); color: var(--accent); }
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--line); display: flex; padding-bottom: env(safe-area-inset-bottom); }
+nav.tabs a { flex: 1; text-align: center; padding: 8px 2px; min-height: 56px; font-size: 13px; line-height: 1.3; color: var(--muted); text-decoration: none; display: flex; flex-direction: column; justify-content: center; }
+nav.tabs a b { font-size: 16px; }
+nav.tabs a.on { color: var(--accent); font-weight: 700; border-top: 3px solid var(--accent); }
+.fab { position: fixed; right: 16px; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 7; width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink); font-size: 28px; box-shadow: 0 2px 8px rgba(0,0,0,.35); cursor: pointer; }
+/* 付箋カード */
+.note { display: flex; gap: 12px; border-radius: 12px; border: 1px solid var(--line); padding: 10px 12px; margin: 8px 0; background: var(--k-other); color: var(--ink); text-decoration: none; }
+.note.k-食事 { background: var(--k-food); } .note.k-観光 { background: var(--k-sight); } .note.k-宿 { background: var(--k-stay); }
+.note.k-移動 { background: var(--k-move); } .note.k-買い物 { background: var(--k-shop); }
+.note.rejected { opacity: .6; }
+.note .ph { width: 72px; height: 72px; flex: none; border-radius: 8px; background: var(--surface) center/cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--muted); text-align: center; overflow: hidden; }
+.note .tt { font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+.note .sm { font-size: 14px; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+/* タイムライン */
+.tl { border-left: 3px solid var(--accent); margin: 12px 0 12px 8px; padding-left: 12px; }
+.ev { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
+.ev::before { content: ""; position: absolute; left: -22px; top: 18px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+.ev .tm { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ev .warnline { margin-top: 6px; font-size: 14px; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 4px 8px; }
+.gap { margin: 10px 0; padding: 8px 12px; border: 2px dashed var(--accent); border-radius: 12px; color: var(--accent); font-weight: 700; }
+/* 入力 */
+label.f { display: block; margin: 12px 0 4px; font-size: 14px; color: var(--muted); }
+input[type=text], input[type=url], input[type=time], input[type=number], select, textarea { width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+textarea { min-height: 96px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+.sheet { background: var(--bg); width: 100%; max-width: 760px; max-height: 92vh; overflow: auto; border-radius: 16px 16px 0 0; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+.sheet h2 { margin-top: 0; }
+.photos { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
+.photos .p { position: relative; flex: none; }
+.photos img { height: 150px; border-radius: 10px; display: block; }
+.photos .x { position: absolute; top: 4px; right: 4px; min-width: 44px; min-height: 44px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; }
+.cm { border-bottom: 1px solid var(--line); padding: 8px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(140px + env(safe-area-inset-bottom)); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 30; max-width: 90%; }
+.who { font-size: 13px; }
+:focus-visible { outline: 3px solid #f5a623; outline-offset: 2px; }
+.detail-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+dl.kv { display: grid; grid-template-columns: 7em 1fr; gap: 4px 8px; margin: 8px 0; }
+dl.kv dt { color: var(--muted); font-size: 14px; } dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1 id="ttl">北海道旅行2026</h1>
+  <span class="who" id="whoLabel"></span>
+  <button id="btnRefresh" aria-label="更新">更新</button>
+</header>
+<main id="app"></main>
+<nav class="tabs" id="tabs"></nav>
+<button class="fab" id="fab" aria-label="付箋を追加">＋</button>
+<div id="layer"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+// 北海道旅行アプリ — 純粋ロジック（Node でテスト可能。Apps Script ではそのまま同じプロジェクトに core.gs として置く）
+// Google 側の部品（シート・Drive・UrlFetch）は store / svc として外から渡す。
+
+var TRIP_DAYS = ['2026-11-22', '2026-11-23', '2026-11-24'];
+var STD_COLS = ['createdBy', 'updatedBy', 'createdAt', 'updatedAt', 'deleted'];
+var TABLES = {
+  notes: ['id', 'title', 'kind', 'status', 'urls', 'photos', 'thumb', 'summary', 'address', 'lat', 'lng',
+    'hours', 'closed', 'reservation', 'budget', 'duration', 'day', 'needsBoost', 'ogpStatus', 'detail'].concat(STD_COLS),
+  events: ['id', 'day', 'start', 'end', 'order', 'title', 'kind', 'transport', 'travelMin', 'noteId', 'memo'].concat(STD_COLS),
+  comments: ['id', 'targetType', 'targetId', 'body'].concat(STD_COLS),
+  packing: ['id', 'item', 'owner', 'done', 'memo'].concat(STD_COLS),
+  reservations: ['id', 'kind', 'name', 'datetime', 'code', 'memo', 'noteId'].concat(STD_COLS),
+  costs: ['id', 'item', 'amount', 'day', 'noteId', 'paid'].concat(STD_COLS),
+  todos: ['id', 'text', 'day', 'state', 'decision', 'noteId'].concat(STD_COLS),
+  settings: ['id', 'value'].concat(STD_COLS)
+};
+var NOTE_KINDS = ['食事', '観光', '宿', '移動', '買い物', 'その他'];
+var NOTE_STATUSES = ['候補', '採用', '保留', '却下'];
+var CELL_MAX = 49000;
+var MAX_PHOTOS = 5;
+var BLOCKED_DOMAINS = ['instagram.com', 'twitter.com', 'x.com', 'tiktok.com', 'facebook.com', 'threads.net'];
+
+// ---------- 時刻 ----------
+function toMin(s) {
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(s || '').trim());
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+function fromMin(n) {
+  var h = Math.floor(n / 60), mm = n % 60;
+  return (h < 10 ? '0' : '') + h + ':' + (mm < 10 ? '0' : '') + mm;
+}
+function parseDurationMin(s) {
+  // 「90分」「1.5時間」「2時間」「1時間30分」→ 分。読めなければ null
+  var t = String(s || '').replace(/\s/g, '');
+  var m = /^(\d+(?:\.\d+)?)時間(?:(\d+)分)?$/.exec(t);
+  if (m) return Math.round(Number(m[1]) * 60 + (m[2] ? Number(m[2]) : 0));
+  m = /^(\d+)分$/.exec(t);
+  if (m) return Number(m[1]);
+  return null;
+}
+
+// ---------- 予定の並び・点検 ----------
+function sortEvents(events) {
+  return events.slice().sort(function (a, b) {
+    var ta = toMin(a.start), tb = toMin(b.start);
+    if (ta === null && tb === null) return (Number(a.order) || 0) - (Number(b.order) || 0);
+    if (ta === null) return 1;      // 時刻未定は後ろ（日別ページでは別枠に出す）
+    if (tb === null) return -1;
+    if (ta !== tb) return ta - tb;
+    return (Number(a.order) || 0) - (Number(b.order) || 0);
+  });
+}
+function eventEndMin(ev, note) {
+  var s = toMin(ev.start);
+  if (s === null) return null;
+  var e = toMin(ev.end);
+  if (e !== null) return e;
+  var d = note ? parseDurationMin(note.duration) : null;
+  return d !== null ? s + d : s;
+}
+// 日の予定を点検する。返り値は時刻つき予定の行ごとの注意と、時刻未定の予定
+//   gapBefore: 直前の予定の終わりからの空き（分。GAP_MIN 以上のときだけ）
+//   warns: 「時間が重なっています」「移動時間が足りません」
+function analyzeDay(events, notesById, gapMin) {
+  var limit = gapMin == null ? 90 : gapMin;
+  var sorted = sortEvents(events.filter(function (e) { return !isDeleted(e); }));
+  var timed = sorted.filter(function (e) { return toMin(e.start) !== null; });
+  var untimed = sorted.filter(function (e) { return toMin(e.start) === null; });
+  var rows = [];
+  var prev = null, prevEnd = null;
+  timed.forEach(function (ev) {
+    var note = ev.noteId ? notesById[ev.noteId] : null;
+    var s = toMin(ev.start);
+    var row = { event: ev, note: note || null, warns: [], gapBefore: null };
+    if (prev) {
+      if (s < prevEnd) row.warns.push('前の予定（' + prev.title + '）と時間が重なっています');
+      var travel = Number(ev.travelMin);
+      if (travel > 0 && prevEnd + travel > s) row.warns.push('移動時間が足りません（前の予定の終わり＋' + travel + '分が開始を過ぎます）');
+      if (s - prevEnd >= limit && !row.warns.length) row.gapBefore = s - prevEnd;
+    }
+    rows.push(row);
+    prev = ev;
+    var end = eventEndMin(ev, note);
+    prevEnd = prevEnd === null ? end : Math.max(prevEnd, end);
+  });
+  return { timed: rows, untimed: untimed.map(function (ev) { return { event: ev, note: ev.noteId ? notesById[ev.noteId] || null : null }; }) };
+}
+
+// ---------- 付箋の補助 ----------
+function isDeleted(r) { return !!(r && r.deleted && r.deleted !== '0'); }
+function parseJson(s, fallback) {
+  if (Array.isArray(s)) return s;
+  try { var v = JSON.parse(s); return Array.isArray(v) ? v : fallback; } catch (e) { return fallback; }
+}
+function hostOf(url) {
+  var m = /^https?:\/\/([^\/?#:]+)/i.exec(String(url || '').trim());
+  return m ? m[1].toLowerCase().replace(/^www\./, '') : '';
+}
+function isBlockedDomain(url) {
+  var h = hostOf(url);
+  return BLOCKED_DOMAINS.some(function (d) { return h === d || h.slice(-(d.length + 1)) === '.' + d; });
+}
+function domainLabel(url) {
+  var h = hostOf(url);
+  if (!h) return '';
+  var map = { 'instagram.com': 'Instagram', 'x.com': 'X', 'twitter.com': 'X', 'tiktok.com': 'TikTok', 'facebook.com': 'Facebook',
+    'threads.net': 'Threads', 'tabelog.com': '食べログ', 'youtube.com': 'YouTube', 'youtu.be': 'YouTube', 'maps.app.goo.gl': 'Google マップ',
+    'goo.gl': 'Google マップ' };
+  return map[h] || h;
+}
+function guessKind(url) {
+  var h = hostOf(url);
+  if (/tabelog|gnavi|hotpepper|retty|gurunavi|ramendb/.test(h)) return '食事';
+  if (/jalan|rakuten.*travel|ikyu|booking|agoda|hoshinoresorts|expedia/.test(h)) return '宿';
+  return 'その他';
+}
+function extractUrls(text) {
+  var m = String(text || '').match(/https?:\/\/[^\s<>"'）)」]+/g);
+  return m || [];
+}
+
+// HTML から OGP（タイトル・説明・画像）を取り出す
+function decodeEntities_(s) {
+  return String(s).replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos|nbsp);/g, function (all, e) {
+    if (e === 'amp') return '&'; if (e === 'lt') return '<'; if (e === 'gt') return '>';
+    if (e === 'quot') return '"'; if (e === 'apos') return "'"; if (e === 'nbsp') return ' ';
+    var code = e.charAt(1) === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+    return isNaN(code) ? all : String.fromCodePoint(code);
+  });
+}
+function absUrl_(u, base) {
+  if (!u) return '';
+  if (/^https?:\/\//i.test(u)) return u;
+  var m = /^(https?:\/\/[^\/?#]+)/i.exec(base || '');
+  if (!m) return '';
+  if (u.indexOf('//') === 0) return /^https/i.test(base) ? 'https:' + u : 'http:' + u;
+  if (u.charAt(0) === '/') return m[1] + u;
+  return '';
+}
+function parseOgp(html, baseUrl) {
+  var src = String(html || '');
+  var metas = {};
+  var re = /<meta\b([^>]*)>/gi, m;
+  while ((m = re.exec(src)) !== null) {
+    var attrs = {}, ar = /([a-zA-Z:_-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g, a;
+    while ((a = ar.exec(m[1])) !== null) attrs[a[1].toLowerCase()] = a[2] !== undefined ? a[2] : a[3];
+    var key = (attrs.property || attrs.name || '').toLowerCase();
+    if (key && attrs.content !== undefined && metas[key] === undefined) metas[key] = decodeEntities_(attrs.content).trim();
+  }
+  var t = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(src);
+  var title = metas['og:title'] || metas['twitter:title'] || (t ? decodeEntities_(t[1]).replace(/\s+/g, ' ').trim() : '');
+  var description = metas['og:description'] || metas['twitter:description'] || metas.description || '';
+  var image = absUrl_(metas['og:image'] || metas['twitter:image'] || '', baseUrl);
+  if (!title && !description && !image) return null;
+  return { title: title, description: description, image: image };
+}
+
+// ---------- 行の扱い ----------
+function cleanRow_(table, row) {
+  var out = {};
+  TABLES[table].forEach(function (c) {
+    var v = row[c];
+    if (v === undefined || v === null) v = '';
+    if (typeof v === 'object') v = JSON.stringify(v);
+    v = String(v);
+    out[c] = v.length > CELL_MAX ? v.slice(0, CELL_MAX) : v;
+  });
+  return out;
+}
+function mergeRows(list, incoming) {
+  var byId = {};
+  list.forEach(function (r, i) { byId[r.id] = i; });
+  var out = list.slice();
+  incoming.forEach(function (r) {
+    if (byId[r.id] === undefined) { byId[r.id] = out.length; out.push(r); }
+    else if (String(r.updatedAt || '') >= String(out[byId[r.id]].updatedAt || '')) out[byId[r.id]] = r;
+  });
+  return out;
+}
+
+// 初回に入れる旅程（仕様書 §12。確定している時刻だけ）
+function seedEvents(now) {
+  var mk = function (day, order, start, title, kind, memo) {
+    return { id: 'ev_seed_' + day.slice(8) + '_' + order, day: day, start: start, end: '', order: String(order), title: title, kind: kind,
+      transport: '', travelMin: '', noteId: '', memo: memo || '', createdBy: '初期データ', updatedBy: '初期データ', createdAt: now, updatedAt: now, deleted: '' };
+  };
+  return [
+    mk(TRIP_DAYS[0], 10, '', '自宅 → 空港', '移動', '空港名・出発時刻は未定'),
+    mk(TRIP_DAYS[0], 20, '10:30', '札幌着', '移動', ''),
+    mk(TRIP_DAYS[1], 10, '', '札幌 → 旭川', '移動', '手段は未定（レンタカーか公共交通か）'),
+    mk(TRIP_DAYS[1], 20, '', '旭川の星野リゾートに宿泊', '宿', '施設名は未定'),
+    mk(TRIP_DAYS[2], 10, '', '旭川 → 旭川空港', '移動', ''),
+    mk(TRIP_DAYS[2], 20, '16:50', '旭川発', '移動', ''),
+    mk(TRIP_DAYS[2], 30, '', '空港 → 自宅', '移動', '')
+  ];
+}
+
+// ---------- RPC（Google 側は store / svc で差し替え） ----------
+// store: list(table) / get(table,id) / put(table,row)
+// svc:   now() / newId(prefix) / fetchUrl(url) -> {text, finalUrl} / savePhoto(noteId, base64) -> fileId
+// role:  'view'（2人の画面）または 'api'（Claude）
+function handleRpc(store, svc, role, req) {
+  var who = String(req.who || '').slice(0, 20) || (role === 'api' ? 'Claude' : '不明');
+  switch (req.action) {
+    case 'ping': return { ok: true, now: svc.now() };
+    case 'sync': return rpcSync_(store, svc, req);
+    case 'save': return rpcSave_(store, svc, role, who, req);
+    case 'remove': return rpcRemove_(store, svc, who, req);
+    case 'fetchOgp': return rpcFetchOgp_(store, svc, req);
+    case 'uploadPhoto': return rpcUploadPhoto_(store, svc, who, req);
+    case 'removePhoto': return rpcRemovePhoto_(store, svc, who, req);
+    case 'geocode': return rpcGeocode_(store, svc, who, req);
+    case 'export':
+      if (role !== 'api') return { error: 'forbidden' };
+      var all = {};
+      Object.keys(TABLES).forEach(function (t) { all[t] = store.list(t).filter(function (r) { return !isDeleted(r); }); });
+      return { now: svc.now(), tables: all };
+    default: return { error: 'unknown action' };
+  }
+}
+
+function rpcSync_(store, svc, req) {
+  var since = String(req.since || '');
+  var tables = {};
+  Object.keys(TABLES).forEach(function (t) {
+    tables[t] = store.list(t).filter(function (r) {
+      return since ? String(r.updatedAt || '') > since : !isDeleted(r);
+    });
+  });
+  return { now: svc.now(), tables: tables };
+}
+
+function rpcSave_(store, svc, role, who, req) {
+  var table = req.table;
+  if (!TABLES[table]) return { error: 'unknown table' };
+  var row = req.row || {};
+  var now = svc.now();
+  var existing = row.id ? store.get(table, row.id) : null;
+  if (existing) {
+    if (req.base !== undefined && req.base !== null && existing.updatedAt !== req.base) return { conflict: true, current: existing };
+    var merged = {};
+    TABLES[table].forEach(function (c) { merged[c] = row[c] !== undefined ? row[c] : existing[c]; });
+    merged.id = existing.id;
+    merged.createdBy = existing.createdBy; merged.createdAt = existing.createdAt;
+    merged.updatedBy = who; merged.updatedAt = now;
+    var saved = cleanRow_(table, merged);
+    store.put(table, saved);
+    return { row: saved };
+  }
+  var fresh = {};
+  TABLES[table].forEach(function (c) { fresh[c] = row[c] !== undefined ? row[c] : ''; });
+  fresh.id = row.id || svc.newId(table.charAt(0));
+  fresh.createdBy = who; fresh.updatedBy = who; fresh.createdAt = now; fresh.updatedAt = now; fresh.deleted = '';
+  if (table === 'notes') {
+    if (!fresh.kind) fresh.kind = 'その他';
+    if (!fresh.status) fresh.status = '候補';
+    if (fresh.urls && !fresh.title) fresh.ogpStatus = fresh.ogpStatus || 'pending';
+  }
+  var cleaned = cleanRow_(table, fresh);
+  store.put(table, cleaned);
+  return { row: cleaned };
+}
+
+function rpcRemove_(store, svc, who, req) {
+  if (!TABLES[req.table]) return { error: 'unknown table' };
+  var existing = store.get(req.table, req.id);
+  if (!existing) return { error: 'not found' };
+  existing.deleted = '1'; existing.updatedBy = who; existing.updatedAt = svc.now();
+  store.put(req.table, existing);
+  return { row: existing };
+}
+
+function rpcFetchOgp_(store, svc, req) {
+  var n = store.get('notes', req.id);
+  if (!n) return { error: 'not found' };
+  var urls = parseJson(n.urls, []);
+  var url = urls[0];
+  if (!url) return { row: n };
+  var info = null;
+  if (isBlockedDomain(url)) {
+    n.ogpStatus = 'blocked';
+  } else {
+    try {
+      var res = svc.fetchUrl(url);
+      info = parseOgp(res.text, res.finalUrl || url);
+    } catch (e) { info = null; }
+    n.ogpStatus = info ? 'ok' : 'failed';
+  }
+  if (info) {
+    if (!n.title && info.title) n.title = info.title.slice(0, 120);
+    if (!n.summary && info.description) n.summary = info.description.slice(0, 300);
+    if (!n.thumb && parseJson(n.photos, []).length === 0 && info.image) n.thumb = info.image;
+    if (!info.description && !info.image) n.needsBoost = '1';
+  } else {
+    if (!n.title) n.title = domainLabel(url) + 'のリンク';
+    n.needsBoost = '1';
+  }
+  n.updatedBy = '自動取得'; n.updatedAt = svc.now();
+  store.put('notes', n);
+  return { row: n };
+}
+
+function rpcUploadPhoto_(store, svc, who, req) {
+  var n = store.get('notes', req.id);
+  if (!n) return { error: 'not found' };
+  var photos = parseJson(n.photos, []);
+  if (photos.length >= MAX_PHOTOS) return { error: '写真は1付箋に' + MAX_PHOTOS + '枚までです' };
+  var fileId = svc.savePhoto(n.id, req.data);
+  photos.push(fileId);
+  n.photos = JSON.stringify(photos);
+  if (req.thumb && (photos.length === 1 || !n.thumb || /^https?:/.test(n.thumb))) n.thumb = String(req.thumb).slice(0, CELL_MAX);
+  n.updatedBy = who; n.updatedAt = svc.now();
+  store.put('notes', n);
+  return { row: n };
+}
+
+// 住所から緯度経度を求めて付箋に保存する（svc.geocode は Apps Script では Maps.newGeocoder）。取れなければ付箋はそのまま
+function rpcGeocode_(store, svc, who, req) {
+  var n = store.get('notes', req.id);
+  if (!n) return { error: 'not found' };
+  var addr = String(req.address || n.address || '').trim();
+  if (!addr) return { row: n, located: false };
+  var g = null;
+  try { g = svc.geocode(addr); } catch (e) { g = null; }
+  if (!g || isNaN(Number(g.lat)) || isNaN(Number(g.lng))) return { row: n, located: false };
+  n.lat = String(g.lat); n.lng = String(g.lng);
+  n.updatedBy = who; n.updatedAt = svc.now();
+  store.put('notes', n);
+  return { row: n, located: true };
+}
+
+function rpcRemovePhoto_(store, svc, who, req) {
+  var n = store.get('notes', req.id);
+  if (!n) return { error: 'not found' };
+  var photos = parseJson(n.photos, []).filter(function (p) { return p !== req.fileId; });
+  n.photos = JSON.stringify(photos);
+  if (!photos.length && n.thumb && n.thumb.indexOf('data:') === 0) n.thumb = '';
+  n.updatedBy = who; n.updatedAt = svc.now();
+  store.put('notes', n);
+  return { row: n };
+}
+
+
+</script>
+<script>
+var API_URL = "https://script.google.com/macros/s/AKfycbydLUES_r6yWuFpuqGm2FrDQ-tAotDAZv4LRIIoJcib_n-xkOrxiEzGPpWkVpcZD8PwaA/exec";
+var TOKEN = (function () {
+  var m = /[#&]t=([0-9a-f]+)/.exec(location.hash), t = m ? m[1] : '';
+  try { if (t) localStorage.setItem('hk_tok', t); else t = localStorage.getItem('hk_tok') || ''; } catch (e) { }
+  return t;
+})();
+var DAY_LABELS = [
+  { date: '2026-11-22', md: '11/22', wd: '日', route: '自宅 → 札幌' },
+  { date: '2026-11-23', md: '11/23', wd: '月・祝', route: '札幌 → 旭川' },
+  { date: '2026-11-24', md: '11/24', wd: '火', route: '旭川 → 自宅' }
+];
+var TRANSPORTS = ['', '飛行機', 'レンタカー', '電車', 'バス', 'タクシー', '徒歩', 'その他'];
+var TABLE_NAMES = ['notes', 'events', 'comments', 'packing', 'reservations', 'costs', 'todos', 'settings'];
+var S = { who: '', rows: {}, since: '', route: '', filters: { kind: '', status: '', day: '', boost: false, q: '' }, editing: null, busy: 0, lastSync: '' };
+TABLE_NAMES.forEach(function (t) { S.rows[t] = []; });
+
+// ---------- ストレージ（失敗しても動く） ----------
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+
+// ---------- サーバー呼び出し ----------
+function rpc(req) {
+  req.who = S.who; req.token = TOKEN;
+  return fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(req), redirect: "follow", credentials: "omit" })
+    .then(function (res) { return res.json(); })
+    .then(function (r) { if (r && r.error) throw new Error(r.error); return r; });
+}
+function toast(msg) {
+  var t = document.getElementById('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.h); toast.h = setTimeout(function () { t.hidden = true; }, 3500);
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function live(t) { return S.rows[t].filter(function (r) { return !isDeleted(r); }); }
+function noteById(id) { return S.rows.notes.filter(function (n) { return n.id === id; })[0] || null; }
+function notesMap() { var m = {}; S.rows.notes.forEach(function (n) { if (!isDeleted(n)) m[n.id] = n; }); return m; }
+function applyRows(tables) {
+  TABLE_NAMES.forEach(function (t) { if (tables[t] && tables[t].length) S.rows[t] = mergeRows(S.rows[t], tables[t]); });
+}
+function saveCache() { lsSet('hk_cache', JSON.stringify({ rows: S.rows, since: S.since })); }
+
+// ---------- 同期 ----------
+function sync(manual) {
+  var btn = document.getElementById('btnRefresh');
+  btn.textContent = '…';
+  return rpc({ action: 'sync', since: S.since }).then(function (r) {
+    applyRows(r.tables);
+    // 取りこぼし防止に5秒ぶん重ねて次回の起点にする
+    var d = new Date(r.now.replace('T', ' ').replace(/-/g, '/').slice(0, 19));
+    d.setSeconds(d.getSeconds() - 5);
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    S.since = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.000';
+    S.lastSync = r.now;
+    saveCache();
+    btn.textContent = '更新';
+    if (!S.editing) render();
+    if (manual) toast('最新にしました');
+    // 取得中の付箋があれば取得を依頼
+    live('notes').forEach(function (n) { if (n.ogpStatus === 'pending') requestOgp(n.id); });
+  }).catch(function (e) { btn.textContent = '更新'; if (manual) toast('更新できませんでした：' + (e.message || e)); });
+}
+function requestOgp(id) {
+  if (requestOgp.busy[id]) return; requestOgp.busy[id] = true;
+  rpc({ action: 'fetchOgp', id: id }).then(function (r) { applyRows({ notes: [r.row] }); saveCache(); if (!S.editing) render(); })
+    .catch(function () { }).then(function () { requestOgp.busy[id] = false; });
+}
+requestOgp.busy = {};
+
+// ---------- 保存（競合あり） ----------
+function saveRow(table, row, base) {
+  return rpc({ action: 'save', table: table, row: row, base: base }).then(function (r) {
+    if (r.conflict) return resolveConflict(table, row, r.current);
+    applyRows((function () { var o = {}; o[table] = [r.row]; return o; })()); saveCache();
+    return r.row;
+  });
+}
+function resolveConflict(table, mine, current) {
+  return new Promise(function (resolve, reject) {
+    var keys = Object.keys(mine).filter(function (k) { return k !== 'id' && String(mine[k]) !== String(current[k]); });
+    var h = '<div class="sheet-bg"><div class="sheet" role="dialog" aria-modal="true"><h2>相手が先に更新していました</h2>' +
+      '<p>' + esc(current.updatedBy) + 'さんが保存した内容と、いまの編集内容が違います。どちらを使いますか？</p>' +
+      keys.map(function (k) { return '<div class="card"><b>' + esc(k) + '</b><br>相手：' + esc(String(current[k]).slice(0, 200)) + '<br>自分：' + esc(String(mine[k]).slice(0, 200)) + '</div>'; }).join('') +
+      '<div class="row"><button class="btn" id="cfTheirs">相手の内容を使う</button><button class="btn primary" id="cfMine">自分の内容で上書き</button></div></div></div>';
+    document.getElementById('layer').innerHTML = h;
+    document.getElementById('cfTheirs').onclick = function () { document.getElementById('layer').innerHTML = ''; var o = {}; o[table] = [current]; applyRows(o); resolve(current); };
+    document.getElementById('cfMine').onclick = function () {
+      document.getElementById('layer').innerHTML = '';
+      saveRow(table, mine, current.updatedAt).then(resolve, reject);
+    };
+  });
+}
+function removeRow(table, id) {
+  return rpc({ action: 'remove', table: table, id: id }).then(function (r) { applyRows((function () { var o = {}; o[table] = [r.row]; return o; })()); saveCache(); });
+}
+
+// ---------- 部品 ----------
+function imgOf(n) {
+  var ph = parseJson(n.photos, []);
+  if (ph.length) return 'https://drive.google.com/thumbnail?id=' + ph[0] + '&sz=w400';
+  return n.thumb || '';
+}
+function noteCard(n, extra) {
+  var img = n.thumb || (parseJson(n.photos, []).length ? imgOf(n) : '');
+  var urls = parseJson(n.urls, []);
+  var title = n.title || (n.ogpStatus === 'pending' ? '取得中…' : (urls[0] ? domainLabel(urls[0]) + 'のリンク' : '（名前なし）'));
+  var badges = '<span class="badge">' + esc(n.kind) + '</span><span class="badge ' + (n.status === '採用' ? 'ok' : '') + '">' + esc(n.status) + '</span>';
+  if (n.day) badges += '<span class="badge">' + esc(n.day.slice(5).replace('-', '/')) + '</span>';
+  if (n.needsBoost) badges += '<span class="badge warn">要補強</span>';
+  if (n.ogpStatus === 'pending') badges += '<span class="badge">取得中…</span>';
+  return '<a class="note k-' + esc(n.kind) + (n.status === '却下' ? ' rejected' : '') + '" href="#/note/' + esc(n.id) + '">' +
+    '<div class="ph"' + (img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '>' + (img ? '' : '写真なし') + '</div>' +
+    '<div class="grow"><div class="tt">' + esc(title) + '</div><div>' + badges + '</div>' +
+    (n.summary ? '<div class="sm">' + esc(n.summary) + '</div>' : '') + (extra || '') + '</div></a>';
+}
+function dayIndex(date) { return TRIP_DAYS.indexOf(date); }
+function weatherMemo(date) { var r = S.rows.settings.filter(function (x) { return x.id === 'weather:' + date; })[0]; return r ? r.value : ''; }
+
+// ---------- 画面 ----------
+function render() {
+  var route = location.hash.replace(/^#/, '').replace(/(^|[#&])t=[0-9a-f]+/, '') || '/';
+  S.route = route;
+  var app = document.getElementById('app');
+  var parts = route.split('/'); // ['', 'day', '1']
+  var view = parts[1] || '';
+  document.getElementById('whoLabel').textContent = S.who ? S.who + 'として' : '';
+  document.getElementById('fab').hidden = (view === 'note' && !!S.editing);
+  var html, title = '北海道旅行2026';
+  if (view === 'day') { var i = Number(parts[2]) - 1; if (!(i >= 0 && i < 3)) i = 0; html = viewDay(i); title = DAY_LABELS[i].md + '（' + DAY_LABELS[i].wd + '）'; }
+  else if (view === 'notes') { html = viewNotes(); title = '付箋ボード'; }
+  else if (view === 'note') { html = viewNote(parts[2]); title = '付箋'; }
+  else if (view === 'more') { html = viewMore(parts[2]); title = (LISTS[parts[2]] && LISTS[parts[2]].title) || 'その他'; }
+  else if (view === 'map') { html = null; title = '地図'; }
+  else { html = viewHome(); }
+  document.getElementById('ttl').textContent = title;
+  if (html === null) { renderMapView(); renderTabs('more'); return; }   // 地図は作り直さず、ピンだけ更新する
+  if (S.map) { S.map.remove(); S.map = null; }
+  app.innerHTML = html;
+  renderTabs(view, parts[2]);
+}
+function renderTabs(view, arg) {
+  var tabs = [['#/', 'ホーム', '🏠', view === ''], ['#/day/1', '11/22', '日', view === 'day' && arg === '1'], ['#/day/2', '11/23', '月', view === 'day' && arg === '2'],
+    ['#/day/3', '11/24', '火', view === 'day' && arg === '3'], ['#/notes', '付箋', '📝', view === 'notes' || view === 'note'], ['#/more', 'その他', '⋯', view === 'more']];
+  document.getElementById('tabs').innerHTML = tabs.map(function (t) {
+    return '<a href="' + t[0] + '" class="' + (t[3] ? 'on' : '') + '"' + (t[3] ? ' aria-current="page"' : '') + '><b>' + t[2] + '</b>' + t[1] + '</a>';
+  }).join('');
+}
+
+function viewHome() {
+  var notes = live('notes');
+  var boost = notes.filter(function (n) { return n.needsBoost; }).length;
+  var cand = notes.filter(function (n) { return n.status === '候補' || n.status === '保留'; }).length;
+  var open = live('todos').filter(function (t) { return t.state !== '決定'; }).length;
+  var recent = [].concat(live('notes').map(function (n) { return { at: n.updatedAt, by: n.updatedBy, text: '付箋「' + (n.title || '（名前なし）') + '」', href: '#/note/' + n.id }; }),
+    live('events').map(function (e) { return { at: e.updatedAt, by: e.updatedBy, text: '予定「' + e.title + '」', href: '#/day/' + (dayIndex(e.day) + 1) }; }),
+    live('comments').map(function (c) { var n = noteById(c.targetId); return { at: c.updatedAt, by: c.updatedBy, text: 'コメント（' + (n ? n.title : '') + '）', href: '#/note/' + c.targetId }; }))
+    .filter(function (x) { return x.by !== '初期データ'; })
+    .sort(function (a, b) { return a.at < b.at ? 1 : -1; }).slice(0, 8);
+  var h = '<h2>3日間</h2>';
+  DAY_LABELS.forEach(function (d, i) {
+    var evs = live('events').filter(function (e) { return e.day === d.date; });
+    h += '<a class="card" style="display:block;text-decoration:none;color:inherit" href="#/day/' + (i + 1) + '"><b>' + d.md + '（' + d.wd + '）</b> ' + esc(d.route) +
+      '<div class="muted">予定 ' + evs.length + ' 件' + (weatherMemo(d.date) ? ' ／ ' + esc(weatherMemo(d.date)) : '') + '</div></a>';
+  });
+  h += '<h2>付箋</h2><a class="card" style="display:block;text-decoration:none;color:inherit" href="#/notes"><b>付箋ボード</b>　' + notes.length + ' 枚' +
+    '<div class="muted">候補・保留 ' + cand + ' 枚 ／ <span style="font-weight:700">要補強 ' + boost + ' 枚</span>' + (open ? ' ／ 未決事項 ' + open + ' 件' : '') + '</div></a>';
+  h += '<h2>直近の更新</h2>';
+  h += recent.length ? recent.map(function (r) { return '<a class="card" style="display:block;text-decoration:none;color:inherit" href="' + r.href + '">' + esc(r.text) + '<div class="muted">' + esc(r.by) + '・' + esc(String(r.at).slice(5, 16).replace('T', ' ')) + '</div></a>'; }).join('') : '<p class="muted">まだ更新はありません。右下の「＋」から付箋を追加できます。</p>';
+  h += '<p class="muted">更新は45秒ごとに自動で取り込みます。</p><div class="row"><button class="btn" data-act="who">使う人：' + esc(S.who || '未選択') + '（変更）</button></div>';
+  return h;
+}
+
+function viewDay(i) {
+  var d = DAY_LABELS[i];
+  var evs = live('events').filter(function (e) { return e.day === d.date; });
+  var nm = notesMap();
+  var a = analyzeDay(evs, nm, 90);
+  var h = '<div class="row"><a class="btn" href="#/day/' + (i === 0 ? 1 : i) + '"' + (i === 0 ? ' aria-disabled="true"' : '') + '>← 前日</a><div class="grow"></div><a class="btn" href="#/day/' + (i === 2 ? 3 : i + 2) + '"' + (i === 2 ? ' aria-disabled="true"' : '') + '>翌日 →</a></div>';
+  h += '<h2 style="margin-top:12px">' + d.md + '（' + d.wd + '）' + esc(d.route) + '</h2>';
+  var wm = weatherMemo(d.date);
+  h += '<div class="card row"><div class="grow muted">天気・日の出日没メモ：' + (wm ? '<span style="color:var(--ink)">' + esc(wm) + '</span>' : '未記入') + '</div><button class="btn small" data-act="weather" data-date="' + d.date + '">編集</button></div>';
+  h += '<div class="tl">';
+  a.timed.forEach(function (r) {
+    if (r.gapBefore) h += '<div class="gap">空き時間 ' + Math.floor(r.gapBefore / 60) + '時間' + (r.gapBefore % 60 ? (r.gapBefore % 60) + '分' : '') + '　<button class="btn small" data-act="pick" data-date="' + d.date + '">候補から選ぶ ▼</button></div>';
+    h += evCard(r.event, r.note, r.warns);
+  });
+  if (!a.timed.length) h += '<div class="gap">まだ時刻の決まった予定がありません</div>';
+  h += '</div>';
+  if (a.untimed.length) {
+    h += '<h3>時刻未定</h3><div class="tl">' + a.untimed.map(function (r) { return evCard(r.event, r.note, []); }).join('') + '</div>';
+  }
+  h += '<div class="row"><button class="btn primary" data-act="addEvent" data-date="' + d.date + '">＋ 予定を追加</button><button class="btn" data-act="pick" data-date="' + d.date + '">候補から選ぶ</button></div>';
+  // この日の候補
+  var linked = {}; evs.forEach(function (e) { if (e.noteId) linked[e.noteId] = 1; });
+  var cands = live('notes').filter(function (n) { return n.status !== '却下' && !linked[n.id] && (n.day === d.date || !n.day); });
+  h += '<h2>この日の候補（未割り当て）</h2>';
+  if (!cands.length) h += '<p class="muted">候補の付箋はありません。「＋」から追加してください。</p>';
+  cands.forEach(function (n) { h += noteCard(n, '<div style="margin-top:6px"><button class="btn small primary" data-act="assign" data-note="' + esc(n.id) + '" data-date="' + d.date + '">この日に追加</button></div>'); });
+  return h;
+}
+function evCard(e, n, warns) {
+  var tm = e.start ? esc(e.start) + (e.end ? '〜' + esc(e.end) : '') : '時刻未定';
+  var h = '<div class="ev"><div class="row"><span class="tm">' + tm + '</span><span class="badge">' + esc(e.kind || 'その他') + '</span>' +
+    (e.transport ? '<span class="badge">' + esc(e.transport) + (e.travelMin ? ' ' + esc(e.travelMin) + '分' : '') + '</span>' : '') + '<span class="grow"></span>' +
+    '<button class="btn small" data-act="evUp" data-id="' + esc(e.id) + '" aria-label="上へ">↑</button><button class="btn small" data-act="evDown" data-id="' + esc(e.id) + '" aria-label="下へ">↓</button>' +
+    '<button class="btn small" data-act="editEvent" data-id="' + esc(e.id) + '">編集</button></div>' +
+    '<div style="font-weight:700;overflow-wrap:anywhere">' + esc(e.title) + (n && n.status === '採用' ? ' ⭐採用' : '') + '</div>';
+  if (e.memo) h += '<div class="muted" style="overflow-wrap:anywhere">' + esc(e.memo) + '</div>';
+  if (n) h += noteCard(n);
+  warns.forEach(function (w) { h += '<div class="warnline">⚠ ' + esc(w) + '</div>'; });
+  return h + '</div>';
+}
+
+function viewNotes() {
+  var f = S.filters;
+  var list = live('notes').filter(function (n) {
+    if (f.kind && n.kind !== f.kind) return false;
+    if (f.status && n.status !== f.status) return false;
+    if (f.day === 'none' && n.day) return false;
+    if (f.day && f.day !== 'none' && n.day !== f.day) return false;
+    if (f.boost && !n.needsBoost) return false;
+    if (f.q && (n.title + n.summary + n.address + n.urls).indexOf(f.q) < 0) return false;
+    return true;
+  }).sort(function (a, b) { return a.updatedAt < b.updatedAt ? 1 : -1; });
+  var opt = function (arr, cur, blank) { return '<option value="">' + blank + '</option>' + arr.map(function (x) { return '<option value="' + esc(x[0]) + '"' + (cur === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join(''); };
+  var h = '<div class="card"><div class="row">' +
+    '<select data-filter="kind" aria-label="種別" class="grow">' + opt(NOTE_KINDS.map(function (k) { return [k, k]; }), f.kind, '種別：すべて') + '</select>' +
+    '<select data-filter="status" aria-label="状態" class="grow">' + opt(NOTE_STATUSES.map(function (k) { return [k, k]; }), f.status, '状態：すべて') + '</select>' +
+    '<select data-filter="day" aria-label="日" class="grow">' + opt([['none', '日：未定'], ['2026-11-22', '11/22'], ['2026-11-23', '11/23'], ['2026-11-24', '11/24']], f.day, '日：すべて') + '</select></div>' +
+    '<div class="row" style="margin-top:8px"><input type="text" data-filter="q" class="grow" placeholder="言葉で探す" value="' + esc(f.q) + '" aria-label="言葉で探す">' +
+    '<button class="chip' + (f.boost ? ' on' : '') + '" data-act="toggleBoost">要補強のみ</button></div></div>';
+  h += '<p class="muted">' + list.length + ' 枚</p>';
+  h += list.map(function (n) { return noteCard(n); }).join('') || '<p class="muted">付箋がありません。右下の「＋」から追加できます。</p>';
+  return h;
+}
+
+function viewNote(id) {
+  var n = noteById(id);
+  if (!n || isDeleted(n)) return '<p>この付箋は見つかりません。</p><a class="btn" href="#/notes">付箋ボードへ</a>';
+  if (S.editing === id) return noteForm(n);
+  var urls = parseJson(n.urls, []), photos = parseJson(n.photos, []);
+  var h = '<div class="row"><a class="btn" href="#/notes">← 付箋ボード</a><div class="grow"></div><button class="btn primary" data-act="editNote" data-id="' + esc(n.id) + '">編集</button></div>';
+  h += '<h2 style="margin-top:12px;overflow-wrap:anywhere">' + esc(n.title || '（名前なし）') + '</h2>';
+  h += '<div><span class="badge">' + esc(n.kind) + '</span><span class="badge ' + (n.status === '採用' ? 'ok' : '') + '">' + esc(n.status) + '</span>' + (n.day ? '<span class="badge">' + esc(n.day.slice(5).replace('-', '/')) + '</span>' : '') +
+    (n.needsBoost ? '<span class="badge warn">要補強</span>' : '<span class="badge ok">補強済み</span>') + '</div>';
+  if (photos.length) h += '<div class="photos">' + photos.map(function (p) { return '<img alt="写真" src="https://drive.google.com/thumbnail?id=' + esc(p) + '&sz=w900">'; }).join('') + '</div>';
+  else if (n.thumb) h += '<div class="photos"><img alt="写真" src="' + esc(n.thumb) + '"></div>';
+  if (n.summary) h += '<p class="detail-text">' + esc(n.summary) + '</p>';
+  var kv = [['住所', n.address && ('<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.address) + '" target="_blank" rel="noopener">' + esc(n.address) + '（地図）</a>')],
+    ['営業時間', esc(n.hours)], ['定休日', esc(n.closed)], ['予約', esc(n.reservation)], ['予算', esc(n.budget)], ['所要時間', esc(n.duration)]]
+    .filter(function (r) { return r[1]; });
+  if (kv.length) h += '<dl class="kv">' + kv.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('') + '</dl>';
+  if (urls.length) h += '<h3>リンク</h3>' + urls.map(function (u) { return '<div><a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(domainLabel(u) || u) + '</a> <span class="muted">' + esc(u.slice(0, 60)) + '</span></div>'; }).join('');
+  if (n.detail) h += '<h3>詳細資料</h3><div class="card detail-text">' + esc(n.detail) + '</div>';
+  h += '<h3>コメント</h3>';
+  var cms = live('comments').filter(function (c) { return c.targetId === n.id; }).sort(function (a, b) { return a.createdAt < b.createdAt ? -1 : 1; });
+  h += cms.map(function (c) { return '<div class="cm"><b>' + esc(c.createdBy) + '</b> <span class="muted">' + esc(String(c.createdAt).slice(5, 16).replace('T', ' ')) + '</span><br>' + esc(c.body) + '</div>'; }).join('') || '<p class="muted">まだコメントはありません。</p>';
+  h += '<label class="f" for="cmBody">コメントを書く</label><textarea id="cmBody" rows="2"></textarea><div class="row" style="margin-top:8px"><button class="btn primary" data-act="addComment" data-id="' + esc(n.id) + '">送信</button></div>';
+  h += '<div class="muted" style="margin-top:16px">作成：' + esc(n.createdBy) + ' ／ 最終更新：' + esc(n.updatedBy) + '（' + esc(String(n.updatedAt).slice(5, 16).replace('T', ' ')) + '）</div>';
+  return h;
+}
+
+function noteForm(n) {
+  var urls = parseJson(n.urls, []), photos = parseJson(n.photos, []);
+  var sel = function (id, arr, cur) { return '<select id="' + id + '">' + arr.map(function (x) { return '<option' + (x === cur ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select>'; };
+  var txt = function (id, label, val, type) { return '<label class="f" for="' + id + '">' + label + '</label><input type="' + (type || 'text') + '" id="' + id + '" value="' + esc(val) + '">'; };
+  var h = '<h2>付箋を編集</h2>' + txt('f_title', 'タイトル（店名・場所名）', n.title);
+  h += '<label class="f" for="f_kind">種別</label>' + sel('f_kind', NOTE_KINDS, n.kind);
+  h += '<label class="f" for="f_status">状態</label>' + sel('f_status', NOTE_STATUSES, n.status);
+  h += '<label class="f" for="f_day">日</label><select id="f_day"><option value="">未定</option>' + DAY_LABELS.map(function (d) { return '<option value="' + d.date + '"' + (n.day === d.date ? ' selected' : '') + '>' + d.md + '</option>'; }).join('') + '</select>';
+  h += '<label class="f" for="f_urls">URL（1行に1つ）</label><textarea id="f_urls" rows="2">' + esc(urls.join('\n')) + '</textarea>';
+  h += '<label class="f" for="f_summary">概要（一言で）</label><textarea id="f_summary" rows="3">' + esc(n.summary) + '</textarea>';
+  h += txt('f_address', '住所・エリア', n.address) + txt('f_hours', '営業時間', n.hours) + txt('f_closed', '定休日', n.closed) +
+    txt('f_reservation', '予約（要・不要・電話番号など）', n.reservation) + txt('f_budget', '予算', n.budget) + txt('f_duration', '所要時間（例：1時間30分）', n.duration);
+  h += '<label class="f"><input type="checkbox" id="f_boost"' + (n.needsBoost ? ' checked' : '') + ' style="width:24px;height:24px;vertical-align:middle"> 要補強（Claude に調べてほしい）</label>';
+  h += '<h3>写真（最大5枚）</h3><div class="photos">' + photos.map(function (p) { return '<div class="p"><img alt="写真" src="https://drive.google.com/thumbnail?id=' + esc(p) + '&sz=w600"><button class="x" data-act="rmPhoto" data-id="' + esc(n.id) + '" data-file="' + esc(p) + '" aria-label="写真を削除">✕</button></div>'; }).join('') + '</div>';
+  h += '<div class="row"><label class="btn" style="cursor:pointer">写真を追加<input type="file" id="f_photo" accept="image/*" multiple hidden></label><span class="muted" id="photoMsg"></span></div>';
+  h += '<div class="row" style="margin-top:20px"><button class="btn primary grow" data-act="saveNote" data-id="' + esc(n.id) + '">保存</button><button class="btn" data-act="cancelEdit">やめる</button></div>';
+  h += '<div class="row" style="margin-top:16px"><button class="btn small" data-act="refetch" data-id="' + esc(n.id) + '">URLから情報を再取得</button><button class="btn small danger" data-act="delNote" data-id="' + esc(n.id) + '">この付箋を削除</button></div>';
+  return h;
+}
+
+// ---------- その他：持ち物・未決事項・予約・費用 ----------
+// fields: [列, 表示名, 種類（text / number / select / day / check）, 選択肢]
+var LISTS = {
+  packing: { title: '持ち物', icon: '🎒', blank: { owner: '共通' },
+    fields: [['item', '項目', 'text'], ['owner', '担当', 'select', ['共通', '宏樹', '碧依']], ['memo', 'メモ', 'text']] },
+  todos: { title: '未決事項', icon: '❓', blank: { state: '未決' },
+    fields: [['text', '内容（例：2日目の昼はどうする）', 'text'], ['day', '日', 'day'], ['state', '状態', 'select', ['未決', '決定']], ['decision', '決定内容', 'text']] },
+  reservations: { title: '予約', icon: '📅', blank: { kind: '宿' },
+    fields: [['kind', '種類', 'select', ['宿', '飛行機', 'レンタカー', 'その他']], ['name', '名称', 'text'], ['datetime', '日時（例：11/23 15:00）', 'text'],
+      ['code', '予約番号（個人情報はなるべく書かない）', 'text'], ['memo', 'メモ', 'text']] },
+  costs: { title: '費用メモ', icon: '💴', blank: {},
+    fields: [['item', '項目', 'text'], ['amount', '概算額（円・数字）', 'number'], ['day', '日', 'day'], ['paid', '支払済み', 'check']] }
+};
+function listRows(t) { return live(t).sort(function (a, b) { return a.createdAt < b.createdAt ? -1 : 1; }); }
+function yen(n) { return Number(n || 0).toLocaleString('ja-JP') + '円'; }
+function dayShort(d) { return d ? d.slice(5).replace('-', '/') : ''; }
+function viewMore(sub) {
+  if (LISTS[sub]) return viewList(sub);
+  var h = '<h2>旅行の準備</h2>';
+  Object.keys(LISTS).forEach(function (t) {
+    var rows = listRows(t), sum = '';
+    if (t === 'packing') sum = rows.filter(function (r) { return r.done; }).length + ' / ' + rows.length + ' 準備済み';
+    else if (t === 'todos') sum = rows.filter(function (r) { return r.state !== '決定'; }).length + ' 件が未決';
+    else if (t === 'costs') sum = '合計 ' + yen(rows.reduce(function (s, r) { return s + (Number(r.amount) || 0); }, 0));
+    else sum = rows.length + ' 件';
+    h += '<a class="card" style="display:block;text-decoration:none;color:inherit" href="#/more/' + t + '"><b>' + LISTS[t].icon + ' ' + LISTS[t].title + '</b><div class="muted">' + esc(sum) + '</div></a>';
+  });
+  h += '<a class="card" style="display:block;text-decoration:none;color:inherit" href="#/map"><b>🗺 地図</b><div class="muted">位置のある付箋 ' + live('notes').filter(hasPos).length + ' 枚</div></a>';
+  h += '<h2>使う人</h2><div class="row"><button class="btn" data-act="who">使う人：' + esc(S.who || '未選択') + '（変更）</button></div>';
+  return h;
+}
+
+// ---------- 地図（Leaflet＋OpenStreetMap。Google マップのキーは使わない） ----------
+var KIND_COLORS = { '食事': '#e07b39', '観光': '#3c9a4a', '宿': '#6a5acd', '移動': '#667788', '買い物': '#d0558f', 'その他': '#a8943a' };
+S.map = null; S.layer = null; S.mapSel = {}; S.mapDay = ''; S.geoFailed = {}; S.fitted = false;
+function hasPos(n) { return n.lat !== '' && n.lng !== '' && n.lat != null && !isNaN(Number(n.lat)) && !isNaN(Number(n.lng)); }
+function mapVisible(n) {
+  if (n.status === '却下' || !hasPos(n)) return false;
+  if (S.mapDay === 'none') return !n.day;
+  return !S.mapDay || n.day === S.mapDay;
+}
+function renderMapView() {
+  var app = document.getElementById('app');
+  if (!document.getElementById('mapbox')) {
+    if (S.map) { S.map.remove(); S.map = null; }
+    app.innerHTML = '<div class="row"><a class="btn" href="#/more">← 旅行の準備</a></div><h2 style="margin-top:12px">🗺 地図</h2>' +
+      '<div class="chips" id="mapDays"></div><div id="mapbox"></div><p class="muted">ピンをタップして選び、まとめて日に追加できます（もう一度タップで選択を外す）。</p><div id="mapPanel"></div>';
+    if (typeof L === 'undefined') document.getElementById('mapbox').innerHTML = '<p class="muted" style="padding:16px">地図の部品を読み込めませんでした。電波を確認して、開き直してください。</p>';
+    else {
+      S.map = L.map('mapbox', { zoomControl: true }).setView([43.4, 142.4], 7);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap contributors' }).addTo(S.map);
+      S.layer = L.layerGroup().addTo(S.map); S.fitted = false;
+      setTimeout(function () { if (S.map) { S.map.invalidateSize(); S.fitted = false; updateMap(); } }, 250);   // サイズ確定後にピンへ範囲を合わせる
+    }
+  }
+  updateMap();
+}
+function updateMap() {
+  var chips = [['', 'すべて'], ['2026-11-22', '11/22'], ['2026-11-23', '11/23'], ['2026-11-24', '11/24'], ['none', '日未定']];
+  var box = document.getElementById('mapDays');
+  if (box) box.innerHTML = chips.map(function (c) { return '<button class="chip' + (S.mapDay === c[0] ? ' on' : '') + '" data-act="mapDay" data-day="' + c[0] + '">' + c[1] + '</button>'; }).join('');
+  var shown = live('notes').filter(mapVisible);
+  if (S.map && S.layer) {
+    S.layer.clearLayers();
+    var pts = [];
+    shown.forEach(function (n) {
+      var sel = !!S.mapSel[n.id], ll = [Number(n.lat), Number(n.lng)]; pts.push(ll);
+      var m = L.circleMarker(ll, { radius: sel ? 13 : 9, color: sel ? '#000' : '#fff', weight: sel ? 4 : 2, fillColor: KIND_COLORS[n.kind] || '#888', fillOpacity: 0.95 });
+      m.bindTooltip(n.title || '（名前なし）');
+      m.on('click', function () { if (S.mapSel[n.id]) delete S.mapSel[n.id]; else S.mapSel[n.id] = 1; updateMap(); });
+      m.addTo(S.layer);
+    });
+    if (!S.fitted && pts.length) { S.map.invalidateSize(); S.map.fitBounds(pts, { padding: [30, 30], maxZoom: 13 }); S.fitted = true; }
+  }
+  var panel = document.getElementById('mapPanel'); if (!panel) return;
+  var selIds = Object.keys(S.mapSel).filter(function (id) { var n = noteById(id); return n && !isDeleted(n); });
+  var h = '';
+  if (selIds.length) {
+    h += '<div class="card"><b>選んだ付箋 ' + selIds.length + ' 枚</b>' + selIds.map(function (id) { var n = noteById(id); return '<div class="row"><a class="grow" href="#/note/' + esc(n.id) + '">' + esc(n.title || '（名前なし）') + '</a><span class="badge">' + esc(n.kind) + '</span><button class="btn small" data-act="mapUnsel" data-id="' + esc(n.id) + '" aria-label="選択を外す">✕</button></div>'; }).join('') +
+      '<div class="muted" style="margin-top:6px">この日に追加（時刻は日別ページで決めます）</div><div class="row">' + DAY_LABELS.map(function (d) { return '<button class="btn small primary" data-act="mapAssign" data-date="' + d.date + '">' + d.md + '</button>'; }).join('') + '</div></div>';
+  } else if (!shown.length) h += '<p class="muted">位置のある付箋がありません。付箋に住所を入れると、位置を取得できます。</p>';
+  var need = live('notes').filter(function (n) { return n.status !== '却下' && !hasPos(n) && n.address && !S.geoFailed[n.id]; });
+  var noAddr = live('notes').filter(function (n) { return n.status !== '却下' && !hasPos(n) && !n.address; }).length;
+  if (need.length) h += '<div class="card"><b>位置が未取得の付箋 ' + need.length + ' 枚</b><div class="muted">住所はあるが位置がまだありません。</div><div style="margin-top:6px"><button class="btn small primary" data-act="geoAll">住所から位置を取得</button></div></div>';
+  if (noAddr) h += '<p class="muted">住所が未入力の付箋が ' + noAddr + ' 枚あります（付箋を編集して住所を入れると、地図に出ます）。</p>';
+  panel.innerHTML = h;
+}
+function geocodeNote(id, address) {
+  return rpc({ action: 'geocode', id: id, address: address }).then(function (r) {
+    applyRows({ notes: [r.row] }); saveCache();
+    if (!r.located) S.geoFailed[id] = 1;
+    return r.located;
+  });
+}
+function geoAll() {
+  var list = live('notes').filter(function (n) { return n.status !== '却下' && !hasPos(n) && n.address && !S.geoFailed[n.id]; }), ok = 0, i = 0;
+  (function next() {
+    if (i >= list.length) { toast(ok + ' 枚の位置を取得しました' + (ok < list.length ? '（' + (list.length - ok) + ' 枚は住所から見つかりませんでした）' : '')); render(); return; }
+    toast('位置を取得中 ' + (i + 1) + '/' + list.length);
+    geocodeNote(list[i].id).then(function (located) { if (located) ok++; }).catch(function () { S.geoFailed[list[i].id] = 1; }).then(function () { i++; next(); });
+  })();
+}
+function mapAssign(date) {
+  var ids = Object.keys(S.mapSel), base = live('events').filter(function (e) { return e.day === date; }).reduce(function (m, e) { return Math.max(m, Number(e.order) || 0); }, 0), i = 0;
+  closeSheet();
+  (function next() {
+    if (i >= ids.length) { S.mapSel = {}; toast(ids.length + ' 枚を ' + date.slice(5).replace('-', '/') + ' に追加しました'); render(); return; }
+    var n = noteById(ids[i]); i++;
+    if (!n) { next(); return; }
+    saveRow('events', { day: date, title: n.title || domainLabel(parseJson(n.urls, [])[0]), kind: n.kind, noteId: n.id, order: String(base + 10 * i) })
+      .then(function () { return n.day ? null : saveRow('notes', { id: n.id, day: date }, n.updatedAt); })
+      .then(next).catch(function (e) { toast('追加できませんでした：' + (e.message || e)); });
+  })();
+}
+function viewList(t) {
+  var L = LISTS[t], rows = listRows(t);
+  var h = '<div class="row"><a class="btn" href="#/more">← 旅行の準備</a><div class="grow"></div><button class="btn primary" data-act="rowAdd" data-table="' + t + '">＋ 追加</button></div>';
+  h += '<h2 style="margin-top:12px">' + L.icon + ' ' + L.title + '</h2>';
+  if (t === 'packing') h += '<p class="muted">' + rows.filter(function (r) { return r.done; }).length + ' / ' + rows.length + ' 準備済み</p>';
+  if (t === 'costs') {
+    var total = rows.reduce(function (s, r) { return s + (Number(r.amount) || 0); }, 0);
+    var unpaid = rows.filter(function (r) { return !r.paid; }).reduce(function (s, r) { return s + (Number(r.amount) || 0); }, 0);
+    h += '<div class="card"><b>概算の合計 ' + yen(total) + '</b><div class="muted">未払い ' + yen(unpaid) + '</div></div>';
+  }
+  if (t === 'reservations') h += '<p class="muted">予約番号など、個人情報はなるべく書かないでください。</p>';
+  if (!rows.length) h += '<p class="muted">まだありません。「＋ 追加」から入れられます。</p>';
+  rows.forEach(function (r) {
+    var edit = '<button class="btn small" data-act="rowEdit" data-table="' + t + '" data-id="' + esc(r.id) + '">編集</button>';
+    if (t === 'packing') {
+      h += '<div class="card row"><label class="grow row" style="cursor:pointer"><input type="checkbox" style="width:28px;height:28px" data-toggle="packing:done" data-id="' + esc(r.id) + '"' + (r.done ? ' checked' : '') + '> <span style="' + (r.done ? 'text-decoration:line-through;color:var(--muted)' : '') + '">' + esc(r.item) + '</span> <span class="badge">' + esc(r.owner || '共通') + '</span></label>' + edit + (r.memo ? '<div class="muted" style="width:100%">' + esc(r.memo) + '</div>' : '') + '</div>';
+    } else if (t === 'todos') {
+      var done = r.state === '決定';
+      h += '<div class="card"><div class="row"><span class="badge ' + (done ? 'ok' : 'warn') + '">' + esc(r.state || '未決') + '</span>' + (r.day ? '<span class="badge">' + esc(dayShort(r.day)) + '</span>' : '') + '<span class="grow"></span>' + edit + '</div>' +
+        '<div style="font-weight:700;overflow-wrap:anywhere">' + esc(r.text) + '</div>' + (r.decision ? '<div class="detail-text">→ ' + esc(r.decision) + '</div>' : '') +
+        '<div style="margin-top:6px"><button class="btn small" data-act="todoState" data-id="' + esc(r.id) + '">' + (done ? '未決に戻す' : '決定にする') + '</button></div></div>';
+    } else if (t === 'reservations') {
+      h += '<div class="card"><div class="row"><span class="badge">' + esc(r.kind) + '</span><span class="grow"></span>' + edit + '</div><div style="font-weight:700;overflow-wrap:anywhere">' + esc(r.name) + '</div>' +
+        (r.datetime ? '<div>' + esc(r.datetime) + '</div>' : '') + (r.code ? '<div class="muted">予約番号：' + esc(r.code) + '</div>' : '') + (r.memo ? '<div class="muted detail-text">' + esc(r.memo) + '</div>' : '') + '</div>';
+    } else if (t === 'costs') {
+      h += '<div class="card row"><label class="row" style="cursor:pointer"><input type="checkbox" style="width:28px;height:28px" data-toggle="costs:paid" data-id="' + esc(r.id) + '"' + (r.paid ? ' checked' : '') + ' aria-label="支払済み"></label><div class="grow"><div style="font-weight:700;overflow-wrap:anywhere">' + esc(r.item) + '</div>' +
+        '<div class="muted">' + yen(r.amount) + (r.day ? '・' + esc(dayShort(r.day)) : '') + (r.paid ? '・支払済み' : '') + '</div></div>' + edit + '</div>';
+    }
+  });
+  return h;
+}
+function openRowSheet(t, id) {
+  var L = LISTS[t], row = id ? S.rows[t].filter(function (r) { return r.id === id; })[0] : Object.assign({}, L.blank);
+  var h = '<h2>' + L.title + (id ? 'を編集' : 'を追加') + '</h2>';
+  L.fields.forEach(function (f) {
+    var k = f[0], v = row[k] == null ? '' : row[k], dom = 'rf_' + k;
+    if (f[2] === 'select') h += '<label class="f" for="' + dom + '">' + f[1] + '</label><select id="' + dom + '">' + f[3].map(function (o) { return '<option' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+    else if (f[2] === 'day') h += '<label class="f" for="' + dom + '">' + f[1] + '</label><select id="' + dom + '"><option value="">未定</option>' + DAY_LABELS.map(function (d) { return '<option value="' + d.date + '"' + (v === d.date ? ' selected' : '') + '>' + d.md + '</option>'; }).join('') + '</select>';
+    else if (f[2] === 'check') h += '<label class="f"><input type="checkbox" id="' + dom + '"' + (v ? ' checked' : '') + ' style="width:24px;height:24px;vertical-align:middle"> ' + f[1] + '</label>';
+    else h += '<label class="f" for="' + dom + '">' + f[1] + '</label><input type="' + (f[2] === 'number' ? 'number' : 'text') + '"' + (f[2] === 'number' ? ' inputmode="numeric"' : '') + ' id="' + dom + '" value="' + esc(v) + '">';
+  });
+  h += '<div class="row" style="margin-top:16px"><button class="btn primary grow" id="rf_save">保存</button><button class="btn" id="rf_cancel">やめる</button>' + (id ? '<button class="btn danger" id="rf_del">削除</button>' : '') + '</div>';
+  openSheet(h);
+  document.getElementById('rf_cancel').onclick = closeSheet;
+  document.getElementById('rf_save').onclick = function () {
+    var out = id ? { id: id } : {};
+    L.fields.forEach(function (f) { var el = document.getElementById('rf_' + f[0]); out[f[0]] = f[2] === 'check' ? (el.checked ? '1' : '') : el.value.trim(); });
+    if (!out[L.fields[0][0]]) { toast(L.fields[0][1].split('（')[0] + 'を入れてください'); return; }
+    closeSheet();
+    saveRow(t, out, id ? row.updatedAt : undefined).then(render).catch(function (e) { toast('保存できませんでした：' + (e.message || e)); });
+  };
+  var del = document.getElementById('rf_del');
+  if (del) del.onclick = function () { if (confirm('削除しますか？')) { closeSheet(); removeRow(t, id).then(render); } };
+}
+
+// ---------- 付箋の追加（3タップ以内） ----------
+function openSheet(html) { document.getElementById('layer').innerHTML = '<div class="sheet-bg" id="bg"><div class="sheet" role="dialog" aria-modal="true">' + html + '</div></div>'; }
+function closeSheet() { document.getElementById('layer').innerHTML = ''; }
+function openQuickAdd(prefill) {
+  var chosen = '';
+  openSheet('<h2>付箋を追加</h2><label class="f" for="qa">URL または 店名・場所名</label><textarea id="qa" rows="3" placeholder="URLを貼るだけでOK"></textarea>' +
+    '<label class="f">種別（あとで変えられます）</label><div class="chips" id="qaKinds">' + NOTE_KINDS.map(function (k) { return '<button class="chip" data-kind="' + k + '">' + k + '</button>'; }).join('') + '</div>' +
+    '<div class="row" style="margin-top:16px"><button class="btn primary grow" id="qaSave">保存</button><button class="btn" id="qaCancel">やめる</button></div>');
+  var ta = document.getElementById('qa'); if (prefill) ta.value = prefill; ta.focus();
+  document.getElementById('qaKinds').onclick = function (ev) {
+    var b = ev.target.closest('.chip'); if (!b) return;
+    chosen = chosen === b.dataset.kind ? '' : b.dataset.kind;
+    Array.prototype.forEach.call(this.children, function (c) { c.classList.toggle('on', c.dataset.kind === chosen); });
+  };
+  document.getElementById('qaCancel').onclick = closeSheet;
+  document.getElementById('qaSave').onclick = function () {
+    var text = ta.value.trim(); if (!text) { toast('URL か名前を入れてください'); return; }
+    var urls = extractUrls(text);
+    var row = { urls: JSON.stringify(urls), status: '候補' };
+    var rest = text; urls.forEach(function (u) { rest = rest.replace(u, ''); }); rest = rest.trim();
+    if (rest) row.title = rest.slice(0, 120);
+    row.kind = chosen || (urls.length ? guessKind(urls[0]) : 'その他');
+    if (urls.length && !rest) row.ogpStatus = 'pending';
+    var day = S.route.indexOf('/day/') === 0 ? DAY_LABELS[Number(S.route.split('/')[2]) - 1] : null;
+    if (day) row.day = day.date;
+    closeSheet();
+    saveRow('notes', row).then(function (saved) {
+      toast('付箋を追加しました');
+      if (saved.urls !== '[]' && (!saved.title || !saved.summary)) requestOgp(saved.id);
+      if (!S.editing) render();
+    }).catch(function (e) { toast('保存できませんでした：' + (e.message || e)); });
+  };
+}
+
+// ---------- 予定の編集 ----------
+function openEventSheet(ev, date, noteId) {
+  var isNew = !ev; ev = ev || { day: date, start: '', end: '', title: '', kind: 'その他', transport: '', travelMin: '', noteId: noteId || '', memo: '', order: '' };
+  var notes = live('notes').filter(function (n) { return n.status !== '却下'; });
+  openSheet('<h2>' + (isNew ? '予定を追加' : '予定を編集') + '</h2>' +
+    '<label class="f" for="e_title">タイトル</label><input type="text" id="e_title" value="' + esc(ev.title) + '">' +
+    '<div class="row"><div class="grow"><label class="f" for="e_start">開始（空なら時刻未定）</label><input type="time" id="e_start" value="' + esc(ev.start) + '"></div>' +
+    '<div class="grow"><label class="f" for="e_end">終了（任意）</label><input type="time" id="e_end" value="' + esc(ev.end) + '"></div></div>' +
+    '<label class="f" for="e_kind">種別</label><select id="e_kind">' + NOTE_KINDS.map(function (k) { return '<option' + (k === ev.kind ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>' +
+    '<div class="row"><div class="grow"><label class="f" for="e_tr">移動手段</label><select id="e_tr">' + TRANSPORTS.map(function (k) { return '<option value="' + k + '"' + (k === ev.transport ? ' selected' : '') + '>' + (k || '未定') + '</option>'; }).join('') + '</select></div>' +
+    '<div class="grow"><label class="f" for="e_tm">前の予定からの移動時間（分）</label><input type="number" id="e_tm" inputmode="numeric" value="' + esc(ev.travelMin) + '"></div></div>' +
+    '<label class="f" for="e_note">紐づける付箋</label><select id="e_note"><option value="">なし</option>' + notes.map(function (n) { return '<option value="' + esc(n.id) + '"' + (n.id === ev.noteId ? ' selected' : '') + '>' + esc(n.title || '（名前なし）') + '</option>'; }).join('') + '</select>' +
+    '<label class="f" for="e_memo">メモ</label><textarea id="e_memo" rows="2">' + esc(ev.memo) + '</textarea>' +
+    '<div class="row" style="margin-top:16px"><button class="btn primary grow" id="e_save">保存</button><button class="btn" id="e_cancel">やめる</button>' + (isNew ? '' : '<button class="btn danger" id="e_del">削除</button>') + '</div>');
+  document.getElementById('e_cancel').onclick = closeSheet;
+  var noteSel = document.getElementById('e_note');
+  noteSel.onchange = function () { var n = noteById(noteSel.value); if (n) { var t = document.getElementById('e_title'); if (!t.value) t.value = n.title; document.getElementById('e_kind').value = n.kind; } };
+  document.getElementById('e_save').onclick = function () {
+    var row = { id: ev.id, day: ev.day, title: val('e_title') || '（無題）', start: val('e_start'), end: val('e_end'), kind: val('e_kind'), transport: val('e_tr'), travelMin: val('e_tm'), noteId: val('e_note'), memo: val('e_memo') };
+    if (isNew) { delete row.id; var same = live('events').filter(function (e) { return e.day === ev.day; }); row.order = String(same.reduce(function (m, e) { return Math.max(m, Number(e.order) || 0); }, 0) + 10); }
+    closeSheet();
+    saveRow('events', row, isNew ? undefined : ev.updatedAt).then(function (saved) {
+      // 付箋を紐づけたら、付箋の「日」も合わせる
+      var n = noteById(saved.noteId);
+      if (n && !n.day) saveRow('notes', { id: n.id, day: saved.day }, n.updatedAt).then(render);
+      render();
+    }).catch(function (e) { toast('保存できませんでした：' + (e.message || e)); });
+  };
+  var del = document.getElementById('e_del');
+  if (del) del.onclick = function () { if (!confirm('この予定を削除しますか？（紐づけた付箋は残ります）')) return; closeSheet(); removeRow('events', ev.id).then(render); };
+}
+function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function moveEvent(id, dir) {
+  var e = live('events').filter(function (x) { return x.id === id; })[0]; if (!e) return;
+  var sorted = sortEvents(live('events').filter(function (x) { return x.day === e.day; }));
+  var i = sorted.indexOf(sorted.filter(function (x) { return x.id === id; })[0]), j = i + dir;
+  if (j < 0 || j >= sorted.length) return;
+  var o = sorted[j];
+  // 並びは「時刻 → order」。入れ替える2件の時刻が違うと動かないので、同じ時刻・時刻未定どうしだけ入れ替える
+  if (e.start !== o.start) { toast('時刻が違う予定とは入れ替えられません。時刻を変えてください'); return; }
+  var oe = Number(e.order) || 0, oo = Number(o.order) || 0;
+  if (oe === oo) oo = oe + dir;
+  Promise.all([saveRow('events', { id: e.id, order: String(oo) }, e.updatedAt), saveRow('events', { id: o.id, order: String(oe) }, o.updatedAt)]).then(render)
+    .catch(function (er) { toast('並べ替えできませんでした：' + (er.message || er)); });
+}
+function openPick(date) {
+  var evs = live('events').filter(function (e) { return e.day === date; }), linked = {};
+  evs.forEach(function (e) { if (e.noteId) linked[e.noteId] = 1; });
+  var cands = live('notes').filter(function (n) { return n.status !== '却下' && !linked[n.id] && (n.day === date || !n.day); });
+  openSheet('<h2>候補から選ぶ</h2>' + (cands.map(function (n) { return noteCard(n, '<div style="margin-top:6px"><button class="btn small primary" data-act="assign" data-note="' + esc(n.id) + '" data-date="' + date + '">この日に追加</button></div>'); }).join('') || '<p class="muted">候補の付箋がありません。</p>') +
+    '<div class="row" style="margin-top:12px"><button class="btn" id="pk_close">閉じる</button></div>');
+  document.getElementById('pk_close').onclick = closeSheet;
+}
+
+// ---------- 写真の縮小（端末側） ----------
+function resizeImage(file, maxSide, quality) {
+  return new Promise(function (resolve, reject) {
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      var s = Math.min(1, maxSide / Math.max(img.width, img.height));
+      var c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('画像を読み込めません')); };
+    img.src = url;
+  });
+}
+function uploadFiles(noteId, files) {
+  var msg = document.getElementById('photoMsg'), list = Array.prototype.slice.call(files), chain = Promise.resolve();
+  list.forEach(function (f, k) {
+    chain = chain.then(function () {
+      if (msg) msg.textContent = '送信中 ' + (k + 1) + '/' + list.length + '…';
+      return Promise.all([resizeImage(f, 1200, 0.7), resizeImage(f, 240, 0.6)]).then(function (r) {
+        return rpc({ action: 'uploadPhoto', id: noteId, data: r[0], thumb: r[1] });
+      }).then(function (res) { applyRows({ notes: [res.row] }); saveCache(); });
+    });
+  });
+  chain.then(function () { if (msg) msg.textContent = ''; toast('写真を追加しました'); render(); })
+    .catch(function (e) { if (msg) msg.textContent = ''; toast('写真を送れませんでした：' + (e.message || e)); });
+}
+
+// ---------- 使う人 ----------
+function chooseWho(force) {
+  openSheet('<h2>どちらで使いますか？</h2><p class="muted">付箋・コメントに「誰が書いたか」が残ります。この端末に覚えておきます。</p><div class="row"><button class="btn primary grow" data-who="宏樹">宏樹</button><button class="btn primary grow" data-who="碧依">碧依</button></div>');
+}
+
+// ---------- イベント ----------
+document.addEventListener('click', function (ev) {
+  var w = ev.target.closest('[data-who]');
+  if (w) { S.who = w.dataset.who; lsSet('hk_who', S.who); closeSheet(); render(); sync(); return; }
+  // 画面内のリンク（#/day/1 など）は、枠の外へ飛ばさず、この画面の中で切り替える
+  var an = ev.target.closest('a[href^="#/"]');
+  if (an && !ev.target.closest('[data-act]')) { ev.preventDefault(); location.hash = an.getAttribute('href') + (TOKEN ? '&t=' + TOKEN : ''); return; }
+  var b = ev.target.closest('[data-act]'); if (!b) return;
+  ev.preventDefault();   // 付箋カード（リンク）の中のボタンでも画面遷移しない
+  var a = b.dataset.act, id = b.dataset.id;
+  if (a === 'who') chooseWho();
+  else if (a === 'addEvent') openEventSheet(null, b.dataset.date);
+  else if (a === 'editEvent') openEventSheet(live('events').filter(function (e) { return e.id === id; })[0]);
+  else if (a === 'evUp') moveEvent(id, -1);
+  else if (a === 'evDown') moveEvent(id, 1);
+  else if (a === 'pick') openPick(b.dataset.date);
+  else if (a === 'assign') {
+    var date = b.dataset.date, n = noteById(b.dataset.note);
+    closeSheet();
+    openEventSheet(null, date, n.id);
+    document.getElementById('e_title').value = n.title || domainLabel(parseJson(n.urls, [])[0]);
+    document.getElementById('e_kind').value = n.kind;
+  }
+  else if (a === 'weather') {
+    var cur = weatherMemo(b.dataset.date), v = prompt('天気・日の出日没などのメモ（例：日の出 6:30／日没 16:05／雪）', cur);
+    if (v === null) return;
+    var existing = S.rows.settings.filter(function (x) { return x.id === 'weather:' + b.dataset.date; })[0];
+    saveRow('settings', { id: 'weather:' + b.dataset.date, value: v }, existing ? existing.updatedAt : undefined).then(render);
+  }
+  else if (a === 'mapDay') { S.mapDay = b.dataset.day; S.fitted = false; updateMap(); }
+  else if (a === 'mapUnsel') { delete S.mapSel[id]; updateMap(); }
+  else if (a === 'mapAssign') mapAssign(b.dataset.date);
+  else if (a === 'geoAll') geoAll();
+  else if (a === 'rowAdd') openRowSheet(b.dataset.table);
+  else if (a === 'rowEdit') openRowSheet(b.dataset.table, id);
+  else if (a === 'todoState') {
+    var td = S.rows.todos.filter(function (r) { return r.id === id; })[0];
+    saveRow('todos', { id: id, state: td.state === '決定' ? '未決' : '決定' }, td.updatedAt).then(render);
+  }
+  else if (a === 'toggleBoost') { S.filters.boost = !S.filters.boost; render(); }
+  else if (a === 'editNote') { S.editing = id; render(); }
+  else if (a === 'cancelEdit') { S.editing = null; render(); }
+  else if (a === 'saveNote') {
+    var n0 = noteById(id), urls = val('f_urls').split(/\s+/).filter(Boolean);
+    var row = { id: id, title: val('f_title'), kind: val('f_kind'), status: val('f_status'), day: val('f_day'), urls: JSON.stringify(urls), summary: val('f_summary'),
+      address: val('f_address'), hours: val('f_hours'), closed: val('f_closed'), reservation: val('f_reservation'), budget: val('f_budget'), duration: val('f_duration'),
+      needsBoost: document.getElementById('f_boost').checked ? '1' : '' };
+    var addrChanged = row.address !== n0.address;
+    if (addrChanged) { row.lat = ''; row.lng = ''; delete S.geoFailed[id]; }   // 住所を変えたら位置を取り直す
+    saveRow('notes', row, n0.updatedAt).then(function (saved) {
+      S.editing = null; toast('保存しました'); render();
+      if (row.address && (addrChanged || !hasPos(saved))) geocodeNote(id).then(function () { render(); }).catch(function () { });
+    }).catch(function (e) { toast('保存できませんでした：' + (e.message || e)); });
+  }
+  else if (a === 'delNote') { if (confirm('この付箋を削除しますか？（予定への紐づけは外れます）')) removeRow('notes', id).then(function () { S.editing = null; location.hash = '#/notes'; }); }
+  else if (a === 'refetch') { rpc({ action: 'save', table: 'notes', row: { id: id, ogpStatus: 'pending' } }).then(function () { requestOgp(id); toast('取得を依頼しました。しばらくして更新してください'); }); }
+  else if (a === 'rmPhoto') { rpc({ action: 'removePhoto', id: id, fileId: b.dataset.file }).then(function (r) { applyRows({ notes: [r.row] }); saveCache(); render(); }); }
+  else if (a === 'addComment') {
+    var body = val('cmBody'); if (!body) return;
+    saveRow('comments', { targetType: 'note', targetId: id, body: body }).then(render).catch(function (e) { toast('送信できませんでした：' + (e.message || e)); });
+  }
+});
+document.addEventListener('change', function (ev) {
+  var tg = ev.target.dataset && ev.target.dataset.toggle;
+  if (tg) {   // 持ち物の準備済み・費用の支払済み
+    var tp = tg.split(':'), cur = S.rows[tp[0]].filter(function (r) { return r.id === ev.target.dataset.id; })[0], patch = { id: cur.id };
+    patch[tp[1]] = ev.target.checked ? '1' : '';
+    saveRow(tp[0], patch, cur.updatedAt).then(render).catch(function (e) { toast('保存できませんでした：' + (e.message || e)); });
+    return;
+  }
+  var f = ev.target.dataset && ev.target.dataset.filter;
+  if (f) { S.filters[f] = ev.target.value; render(); return; }
+  if (ev.target.id === 'f_photo' && S.editing) uploadFiles(S.editing, ev.target.files);
+});
+document.addEventListener('input', function (ev) {
+  if (ev.target.dataset && ev.target.dataset.filter === 'q') {
+    S.filters.q = ev.target.value; clearTimeout(S.qt);
+    S.qt = setTimeout(function () { var pos = ev.target.selectionStart; render(); var el = document.querySelector('[data-filter=q]'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 300);
+  }
+});
+document.getElementById('fab').onclick = function () { openQuickAdd(''); };
+document.getElementById('btnRefresh').onclick = function () { sync(true); };
+window.addEventListener('hashchange', function () { if (S.editing && location.hash.indexOf('#/note/' + S.editing) !== 0) S.editing = null; render(); window.scrollTo(0, 0); });
+setInterval(function () { if (document.visibilityState === 'visible' && !S.editing && !document.getElementById('layer').firstChild) sync(); }, 45000);
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') sync(); });
+
+// ---------- 起動 ----------
+(function boot() {
+  if (!TOKEN) { document.getElementById('app').innerHTML = '<p style="padding:24px">URLを確認してください。</p>'; return; }
+  if (!/[#&]t=/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search + (location.hash || '#/') + '&t=' + TOKEN); } catch (e) { } }
+  S.who = lsGet('hk_who') || '';
+  if (S.who === '夫') S.who = '宏樹'; else if (S.who === '妻') S.who = '碧依';   // 旧い選択を引き継ぐ
+  try { var c = JSON.parse(lsGet('hk_cache') || 'null'); if (c && c.rows) { TABLE_NAMES.forEach(function (t) { S.rows[t] = c.rows[t] || []; }); S.since = c.since || ''; } } catch (e) { }
+  render();
+  if (!S.who) chooseWho();
+  sync();
+})();
+</script>
+</body>
+</html>
