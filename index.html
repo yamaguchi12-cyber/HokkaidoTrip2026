@@ -223,6 +223,17 @@ function extractUrls(text) {
   return m || [];
 }
 
+// 共有メニュー（ショートカット）から開くURLの「add=…」を取り出す。text は付箋に入れる文字列、hash は add を除いたもの
+function takeAddParam(hash) {
+  var h = String(hash || ''), text = '';
+  var re = /([#&])add=([^&]*)/;
+  var m = re.exec(h);
+  if (!m) return { text: '', hash: h };
+  try { text = decodeURIComponent(m[2].replace(/\+/g, ' ')); } catch (e) { text = m[2]; }
+  h = h.replace(re, function (_, sep) { return sep === '#' ? '#' : ''; }).replace(/^#&/, '#');
+  return { text: text.trim().slice(0, 2000), hash: h === '#' ? '' : h };
+}
+
 // HTML から OGP（タイトル・説明・画像）を取り出す
 function decodeEntities_(s) {
   return String(s).replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos|nbsp);/g, function (all, e) {
@@ -1020,7 +1031,7 @@ function chooseWho(force) {
 // ---------- イベント ----------
 document.addEventListener('click', function (ev) {
   var w = ev.target.closest('[data-who]');
-  if (w) { S.who = w.dataset.who; lsSet('hk_who', S.who); closeSheet(); render(); sync(); return; }
+  if (w) { S.who = w.dataset.who; lsSet('hk_who', S.who); closeSheet(); render(); sync(); if (S.pendingAdd) { var pa = S.pendingAdd; S.pendingAdd = ''; openQuickAdd(pa); } return; }
   // 画面内のリンク（#/day/1 など）は、枠の外へ飛ばさず、この画面の中で切り替える
   var an = ev.target.closest('a[href^="#/"]');
   if (an && !ev.target.closest('[data-act]')) { ev.preventDefault(); location.hash = an.getAttribute('href') + (TOKEN ? '&t=' + TOKEN : ''); return; }
@@ -1110,8 +1121,12 @@ document.addEventListener('visibilitychange', function () { if (document.visibil
   S.who = lsGet('hk_who') || '';
   if (S.who === '夫') S.who = '宏樹'; else if (S.who === '妻') S.who = '碧依';   // 旧い選択を引き継ぐ
   try { var c = JSON.parse(lsGet('hk_cache') || 'null'); if (c && c.rows) { TABLE_NAMES.forEach(function (t) { S.rows[t] = c.rows[t] || []; }); S.since = c.since || ''; } } catch (e) { }
+  // 共有メニュー（ショートカット）から「…#t=トークン&add=URL」で開かれたら、付箋の追加画面を開く（保存は本人がタップ）
+  var add = takeAddParam(location.hash);
+  if (add.text) { try { history.replaceState(null, '', location.pathname + location.search + add.hash); } catch (e) { } }
   render();
-  if (!S.who) chooseWho();
+  if (!S.who) { S.pendingAdd = add.text; chooseWho(); }
+  else if (add.text) openQuickAdd(add.text);
   sync();
 })();
 </script>
