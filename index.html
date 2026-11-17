@@ -65,6 +65,8 @@ nav.tabs a.on { color: var(--accent); font-weight: 700; border-top: 3px solid va
 .ev { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
 .ev::before { content: ""; position: absolute; left: -22px; top: 18px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
 .ev.untimed { border-style: dashed; }
+.ad { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.star.off { filter: grayscale(1); opacity: .45; }
 .note { position: relative; }
 .note .tt { padding-right: 40px; }
 .fav { position: absolute; top: 2px; right: 2px; min-width: 44px; min-height: 44px; border: 0; background: none; font-size: 24px; line-height: 1; cursor: pointer; color: var(--ink); }
@@ -578,6 +580,10 @@ function rpcUploadPhoto_(store, svc, who, req) {
   return { row: n };
 }
 
+// Google の住所（「日本、〒070-0032 北海道旭川市…」）から、国名と郵便番号を取る
+function cleanAddress(s) { return String(s || '').replace(/^日本[、,]\s*/, '').replace(/^〒?\d{3}-?\d{4}\s*/, '').trim(); }
+// 丁目・番地まで入っているか（「北海道旭川市」だけのような市区町村止まりを住所として入れない）
+function hasStreetDetail(s) { return /[0-9０-９]/.test(String(s || '')); }
 // 住所から緯度経度を求めて付箋に保存する（svc.geocode は Apps Script では Maps.newGeocoder）。取れなければ付箋はそのまま
 function rpcGeocode_(store, svc, who, req) {
   var n = store.get('notes', req.id);
@@ -588,6 +594,7 @@ function rpcGeocode_(store, svc, who, req) {
   try { g = svc.geocode(addr); } catch (e) { g = null; }
   if (!g || isNaN(Number(g.lat)) || isNaN(Number(g.lng))) return { row: n, located: false };
   n.lat = String(g.lat); n.lng = String(g.lng);
+  if (!n.address && g.address) { var ca = cleanAddress(g.address); if (hasStreetDetail(ca)) n.address = ca; }   // 住所が空なら Google の住所を入れる（番地・丁目まで取れたときだけ）
   n.updatedBy = who; n.updatedAt = svc.now();
   store.put('notes', n);
   return { row: n, located: true };
@@ -741,7 +748,7 @@ function toggleFav(id) {
   (r ? removeRow('comments', r.id) : saveRow('comments', { targetType: 'fav', targetId: id, body: S.who })).then(render)
     .catch(function (e) { toast('保存できませんでした：' + (e.message || e)); });
 }
-function favButton(n) { var on = isFav(n); return '<button class="fav" data-act="fav" data-id="' + esc(n.id) + '" aria-pressed="' + on + '" aria-label="' + (on ? 'お気に入りを外す' : 'お気に入りに入れる') + '">' + (on ? '★' : '☆') + '</button>'; }
+function favButton(n) { var on = isFav(n); return '<button class="fav" data-act="fav" data-id="' + esc(n.id) + '" aria-pressed="' + on + '" aria-label="' + (on ? 'お気に入りを外す' : 'お気に入りに入れる') + '">' + '<span class="star' + (on ? '' : ' off') + '">⭐</span></button>'; }
 function noteCard(n, extra) {
   var img = n.thumb || (parseJson(n.photos, []).length ? imgOf(n) : '');
   var urls = parseJson(n.urls, []);
@@ -754,7 +761,7 @@ function noteCard(n, extra) {
   return '<a class="note k-' + esc(n.kind) + (n.status === '却下' ? ' rejected' : '') + '" href="#/note/' + esc(n.id) + '">' + favButton(n) +
     '<div class="ph"' + (img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '>' + (img ? '' : '写真なし') + '</div>' +
     '<div class="grow"><div class="tt">' + esc(title) + '</div><div>' + badges + '</div>' +
-    (n.summary ? '<div class="sm">' + esc(n.summary) + '</div>' : '') + (extra || '') + '</div></a>';
+    (n.summary ? '<div class="sm">' + esc(n.summary) + '</div>' : '') + (n.address ? '<div class="muted ad">' + esc(n.address) + '</div>' : '') + (extra || '') + '</div></a>';
 }
 function dayIndex(date) { return TRIP_DAYS.indexOf(date); }
 function weatherRaw(date) { var r = S.rows.settings.filter(function (x) { return x.id === 'weather:' + date; })[0]; return r ? r.value : ''; }
@@ -885,7 +892,7 @@ function viewNotes() {
     '<select data-filter="area" aria-label="エリア" class="grow">' + opt(AREAS.map(function (k) { return [k, k]; }), f.area, 'エリア：すべて') + '</select>' +
     '<select data-filter="day" aria-label="日" class="grow">' + opt([['none', '日：未定'], ['2026-11-22', '11/22'], ['2026-11-23', '11/23'], ['2026-11-24', '11/24']], f.day, '日：すべて') + '</select></div>' +
     '<div class="row" style="margin-top:8px"><input type="text" data-filter="q" class="grow" placeholder="言葉で探す" value="' + esc(f.q) + '" aria-label="言葉で探す">' +
-    '<button class="chip' + (f.boost ? ' on' : '') + '" data-act="toggleBoost">要補強のみ</button><button class="chip' + (f.fav ? ' on' : '') + '" data-act="favFilter" aria-pressed="' + !!f.fav + '">★お気に入り</button></div></div>';
+    '<button class="chip' + (f.boost ? ' on' : '') + '" data-act="toggleBoost">要補強のみ</button><button class="chip' + (f.fav ? ' on' : '') + '" data-act="favFilter" aria-pressed="' + !!f.fav + '">⭐お気に入り</button></div></div>';
   h += '<div id="noteList">' + notesListHtml(list) + '</div>';
   return h;
 }
@@ -913,14 +920,14 @@ function viewNote(id) {
   if (!n || isDeleted(n)) return '<p>この付箋は見つかりません。</p><a class="btn" href="#/notes">付箋ボードへ</a>';
   if (S.editing === id) return noteForm(n);
   var urls = parseJson(n.urls, []), photos = parseJson(n.photos, []);
-  var h = '<div class="row"><a class="btn" href="#/notes">← 付箋ボード</a><div class="grow"></div><button class="btn" data-act="fav" data-id="' + esc(n.id) + '" aria-pressed="' + isFav(n) + '">' + (isFav(n) ? '★ お気に入り' : '☆ お気に入り') + '</button><button class="btn primary" data-act="editNote" data-id="' + esc(n.id) + '">編集</button></div>';
+  var h = '<div class="row"><a class="btn" href="#/notes">← 付箋ボード</a><div class="grow"></div><button class="btn" data-act="fav" data-id="' + esc(n.id) + '" aria-pressed="' + isFav(n) + '">' + '<span class="star' + (isFav(n) ? '' : ' off') + '">⭐</span> お気に入り' + '</button><button class="btn primary" data-act="editNote" data-id="' + esc(n.id) + '">編集</button></div>';
   h += '<h2 style="margin-top:12px;overflow-wrap:anywhere">' + esc(n.title || '（名前なし）') + '</h2>';
   h += '<div><span class="badge">' + esc(n.kind) + '</span><span class="badge ' + (n.status === '採用' ? 'ok' : '') + '">' + esc(n.status) + '</span>' + '<span class="badge">📍' + noteArea(n) + '</span>' + (n.day ? '<span class="badge">' + esc(n.day.slice(5).replace('-', '/')) + '</span>' : '') +
     (n.needsBoost ? '<span class="badge warn">要補強</span>' : '<span class="badge ok">補強済み</span>') + '</div>';
   if (photos.length) h += '<div class="photos">' + photos.map(function (p) { return '<img alt="写真" src="https://drive.google.com/thumbnail?id=' + esc(p) + '&sz=w900">'; }).join('') + '</div>';
   else if (n.thumb) h += '<div class="photos"><img alt="写真" src="' + esc(n.thumb) + '"></div>';
   if (n.summary) h += '<p class="detail-text">' + esc(n.summary) + '</p>';
-  var kv = [['住所', n.address ? ('<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(hasPos(n) ? n.lat + ',' + n.lng : n.address) + '" target="_blank" rel="noopener">' + esc(n.address) + '</a>') : (hasPos(n) ? '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.lat + ',' + n.lng) + '" target="_blank" rel="noopener">地図で開く</a>' : '')],
+  var kv = [['住所', n.address ? ('<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(hasPos(n) ? n.lat + ',' + n.lng : n.address) + '" target="_blank" rel="noopener">' + esc(n.address) + '</a>') : '<span class="muted">未入力</span>'],
     ['営業時間', esc(n.hours)], ['定休日', esc(n.closed)], ['予約', esc(n.reservation)], ['予算', esc(n.budget)], ['所要時間', esc(n.duration)]]
     .filter(function (r) { return r[1]; });
   if (kv.length) h += '<dl class="kv">' + kv.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('') + '</dl>';
@@ -1246,7 +1253,7 @@ function openPick(date, kind, area, fav) {
       NOTE_KINDS.filter(function (k) { return kc[k]; }).map(function (k) { return chip(k, area, fav, k, kc[k], k === kind); }).join('') + '</div>' +
     '<div class="chips" role="group" aria-label="エリアとお気に入り" style="margin-bottom:8px">' + chip(kind, '', fav, 'エリア：すべて', nArea, !area) +
       AREAS.filter(function (a) { return ac[a]; }).map(function (a) { return chip(kind, a, fav, '📍' + a, ac[a], a === area); }).join('') +
-      chip(kind, area, !fav, '★お気に入りのみ', nFav, fav) + '</div>' +
+      chip(kind, area, !fav, '⭐お気に入りのみ', nFav, fav) + '</div>' +
     (cands.map(function (n) { return noteCard(n, '<div style="margin-top:6px"><button class="btn small primary" data-act="assign" data-note="' + esc(n.id) + '" data-date="' + date + '">この日に追加</button></div>'); }).join('') || '<p class="muted">候補の付箋がありません。</p>'));
   document.getElementById('pk_close').onclick = closeSheet;
 }
