@@ -813,8 +813,8 @@ function viewNote(id) {
   if (photos.length) h += '<div class="photos">' + photos.map(function (p) { return '<img alt="写真" src="https://drive.google.com/thumbnail?id=' + esc(p) + '&sz=w900">'; }).join('') + '</div>';
   else if (n.thumb) h += '<div class="photos"><img alt="写真" src="' + esc(n.thumb) + '"></div>';
   if (n.summary) h += '<p class="detail-text">' + esc(n.summary) + '</p>';
-  var kv = [['住所', n.address && ('<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.address) + '" target="_blank" rel="noopener">' + esc(n.address) + '（地図）</a>')],
-    ['位置情報', hasPos(n) ? ('<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.lat + ',' + n.lng) + '" target="_blank" rel="noopener">' + esc(n.lat + ', ' + n.lng) + '（地図）</a>') : '<span class="muted">未取得</span>'], ['営業時間', esc(n.hours)], ['定休日', esc(n.closed)], ['予約', esc(n.reservation)], ['予算', esc(n.budget)], ['所要時間', esc(n.duration)]]
+  var kv = [['住所', n.address ? ('<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.address) + '" target="_blank" rel="noopener">' + esc(n.address) + '（地図）</a>') : (hasPos(n) ? '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.lat + ',' + n.lng) + '" target="_blank" rel="noopener">地図で開く</a>' : '')],
+    ['営業時間', esc(n.hours)], ['定休日', esc(n.closed)], ['予約', esc(n.reservation)], ['予算', esc(n.budget)], ['所要時間', esc(n.duration)]]
     .filter(function (r) { return r[1]; });
   if (kv.length) h += '<dl class="kv">' + kv.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('') + '</dl>';
   if (urls.length) h += '<h3>リンク</h3>' + urls.map(function (u) { return '<div><a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(domainLabel(u) || u) + '</a> <span class="muted">' + esc(u.slice(0, 60)) + '</span></div>'; }).join('');
@@ -837,7 +837,7 @@ function noteForm(n) {
   h += '<label class="f" for="f_day">日</label><select id="f_day"><option value="">未定</option>' + DAY_LABELS.map(function (d) { return '<option value="' + d.date + '"' + (n.day === d.date ? ' selected' : '') + '>' + d.md + '</option>'; }).join('') + '</select>';
   h += '<label class="f" for="f_urls">URL（1行に1つ）</label><textarea id="f_urls" rows="2">' + esc(urls.join('\n')) + '</textarea>';
   h += '<label class="f" for="f_summary">概要（一言で）</label><textarea id="f_summary" rows="3">' + esc(n.summary) + '</textarea>';
-  h += txt('f_address', '住所・エリア', n.address) + txt('f_pos', '位置情報（緯度, 経度）　空欄なら住所から自動で取得します', hasPos(n) ? n.lat + ', ' + n.lng : '') + txt('f_hours', '営業時間', n.hours) + txt('f_closed', '定休日', n.closed) +
+  h += txt('f_address', '住所・エリア', n.address) + txt('f_hours', '営業時間', n.hours) + txt('f_closed', '定休日', n.closed) +
     txt('f_reservation', '予約（要・不要・電話番号など）', n.reservation) + txt('f_budget', '予算', n.budget) + txt('f_duration', '所要時間（例：1時間30分）', n.duration);
   h += '<label class="f"><input type="checkbox" id="f_boost"' + (n.needsBoost ? ' checked' : '') + ' style="width:24px;height:24px;vertical-align:middle"> 要補強（Claude に調べてほしい）</label>';
   h += '<h3>写真（最大5枚）</h3><div class="photos">' + photos.map(function (p) { return '<div class="p"><img alt="写真" src="https://drive.google.com/thumbnail?id=' + esc(p) + '&sz=w600"><button class="x" data-act="rmPhoto" data-id="' + esc(n.id) + '" data-file="' + esc(p) + '" aria-label="写真を削除">✕</button></div>'; }).join('') + '</div>';
@@ -1095,21 +1095,25 @@ function moveEvent(id, dir) {
   Promise.all([saveRow('events', { id: e.id, order: String(oo) }, e.updatedAt), saveRow('events', { id: o.id, order: String(oe) }, o.updatedAt)]).then(render)
     .catch(function (er) { toast('並べ替えできませんでした：' + (er.message || er)); });
 }
-// 候補から選ぶ：ジャンル（種別）で絞り込める。「閉じる」は一番上（スクロールしても見える）
-function openPick(date, kind) {
-  kind = kind || '';
+// 候補から選ぶ：ジャンル（種別）とエリアで絞り込める。「閉じる」は一番上（スクロールしても見える）
+function openPick(date, kind, area) {
+  kind = kind || ''; area = area || '';
   var evs = live('events').filter(function (e) { return e.day === date; }), linked = {};
   evs.forEach(function (e) { if (e.noteId) linked[e.noteId] = 1; });
   var all = live('notes').filter(function (n) { return n.status !== '却下' && !linked[n.id] && (n.day === date || !n.day); });
-  var count = {};
-  all.forEach(function (n) { count[n.kind] = (count[n.kind] || 0) + 1; });
-  var cands = kind ? all.filter(function (n) { return n.kind === kind; }) : all;
-  var chip = function (k, label, num) {
-    return '<button class="chip' + (k === kind ? ' on' : '') + '" data-act="pickKind" data-date="' + date + '" data-kind="' + esc(k) + '" aria-pressed="' + (k === kind) + '">' + esc(label) + '（' + num + '）</button>';
+  // 件数は「もう一方の絞り込み」を掛けた数にする
+  var kc = {}, ac = {}, byArea = area ? all.filter(function (n) { return noteArea(n) === area; }) : all, byKind = kind ? all.filter(function (n) { return n.kind === kind; }) : all;
+  byArea.forEach(function (n) { kc[n.kind] = (kc[n.kind] || 0) + 1; });
+  byKind.forEach(function (n) { var a = noteArea(n); ac[a] = (ac[a] || 0) + 1; });
+  var cands = all.filter(function (n) { return (!kind || n.kind === kind) && (!area || noteArea(n) === area); });
+  var chip = function (k, a, label, num, on) {
+    return '<button class="chip' + (on ? ' on' : '') + '" data-act="pickKind" data-date="' + date + '" data-kind="' + esc(k) + '" data-area="' + esc(a) + '" aria-pressed="' + on + '">' + esc(label) + '（' + num + '）</button>';
   };
   openSheet('<div class="pk-head"><h2>候補から選ぶ</h2><button class="btn" id="pk_close">閉じる</button></div>' +
-    '<div class="chips" role="group" aria-label="ジャンル" style="margin-bottom:8px">' + chip('', 'すべて', all.length) +
-      NOTE_KINDS.filter(function (k) { return count[k]; }).map(function (k) { return chip(k, k, count[k]); }).join('') + '</div>' +
+    '<div class="chips" role="group" aria-label="ジャンル" style="margin-bottom:8px">' + chip('', area, 'すべて', byArea.length, !kind) +
+      NOTE_KINDS.filter(function (k) { return kc[k]; }).map(function (k) { return chip(k, area, k, kc[k], k === kind); }).join('') + '</div>' +
+    '<div class="chips" role="group" aria-label="エリア" style="margin-bottom:8px">' + chip(kind, '', 'エリア：すべて', byKind.length, !area) +
+      AREAS.filter(function (a) { return ac[a]; }).map(function (a) { return chip(kind, a, '📍' + a, ac[a], a === area); }).join('') + '</div>' +
     (cands.map(function (n) { return noteCard(n, '<div style="margin-top:6px"><button class="btn small primary" data-act="assign" data-note="' + esc(n.id) + '" data-date="' + date + '">この日に追加</button></div>'); }).join('') || '<p class="muted">候補の付箋がありません。</p>'));
   document.getElementById('pk_close').onclick = closeSheet;
 }
@@ -1163,7 +1167,7 @@ document.addEventListener('click', function (ev) {
   else if (a === 'evUp') moveEvent(id, -1);
   else if (a === 'evDown') moveEvent(id, 1);
   else if (a === 'pick') openPick(b.dataset.date);
-  else if (a === 'pickKind') openPick(b.dataset.date, b.dataset.kind);
+  else if (a === 'pickKind') openPick(b.dataset.date, b.dataset.kind, b.dataset.area);
   else if (a === 'assign') {
     var date = b.dataset.date, n = noteById(b.dataset.note);
     closeSheet();
@@ -1196,12 +1200,8 @@ document.addEventListener('click', function (ev) {
     var row = { id: id, title: val('f_title'), kind: val('f_kind'), status: val('f_status'), day: val('f_day'), urls: JSON.stringify(urls), summary: val('f_summary'),
       address: val('f_address'), hours: val('f_hours'), closed: val('f_closed'), reservation: val('f_reservation'), budget: val('f_budget'), duration: val('f_duration'),
       needsBoost: document.getElementById('f_boost').checked ? '1' : '' };
-    var posOld = hasPos(n0) ? n0.lat + ', ' + n0.lng : '', posNew = val('f_pos').trim(), addrChanged = row.address !== n0.address;
-    if (posNew !== posOld) {   // 位置情報の欄を直接直したとき
-      var pm = posNew && posNew.match(/^(-?d+(?:.d+)?)s*[,，、s]s*(-?d+(?:.d+)?)$/);
-      if (posNew && (!pm || Math.abs(Number(pm[1])) > 90 || Math.abs(Number(pm[2])) > 180)) { toast('位置情報は「43.77, 142.36」のように、緯度と経度を , で区切って入れてください'); return; }
-      row.lat = pm ? pm[1] : ''; row.lng = pm ? pm[2] : ''; delete S.geoFailed[id];
-    } else if (addrChanged) { row.lat = ''; row.lng = ''; delete S.geoFailed[id]; }   // 住所だけ変えたら位置を取り直す
+    var addrChanged = row.address !== n0.address;
+    if (addrChanged) { row.lat = ''; row.lng = ''; delete S.geoFailed[id]; }   // 住所を変えたら位置を取り直す
     saveRow('notes', row, n0.updatedAt).then(function (saved) {
       S.editing = null; toast('保存しました'); render();
       if (row.address && !hasPos(saved)) geocodeNote(id).then(function () { render(); }).catch(function () { });
