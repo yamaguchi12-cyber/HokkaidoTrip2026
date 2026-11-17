@@ -534,7 +534,7 @@ var DAY_LABELS = [
 ];
 var TRANSPORTS = ['', '飛行機', 'レンタカー', '電車', 'バス', 'タクシー', '徒歩', 'その他'];
 var TABLE_NAMES = ['notes', 'events', 'comments', 'packing', 'reservations', 'costs', 'todos', 'settings'];
-var S = { who: '', rows: {}, since: '', route: '', filters: { kind: '', status: '', day: '', boost: false, q: '' }, editing: null, busy: 0, lastSync: '' };
+var S = { who: '', rows: {}, since: '', route: '', filters: { kind: '', status: '', day: '', area: '', boost: false, q: '' }, editing: null, busy: 0, lastSync: '' };
 TABLE_NAMES.forEach(function (t) { S.rows[t] = []; });
 
 // ---------- ストレージ（失敗しても動く） ----------
@@ -621,11 +621,27 @@ function imgOf(n) {
   if (ph.length) return 'https://drive.google.com/thumbnail?id=' + ph[0] + '&sz=w400';
   return n.thumb || '';
 }
+// エリア（札幌・旭川・それ以外）：緯度経度から決める。位置が空ならタイトル・住所の文字から決める
+var AREAS = ['札幌', '旭川', 'それ以外'];
+function noteArea(n) {
+  var km = function (la, ln, la0, ln0) { var dy = (la - la0) * 111, dx = (ln - ln0) * 111 * Math.cos(la0 * Math.PI / 180); return Math.sqrt(dx * dx + dy * dy); };
+  if (hasPos(n)) {
+    var la = Number(n.lat), ln = Number(n.lng);
+    if (km(la, ln, 43.0618, 141.3544) <= 13) return '札幌';
+    if (km(la, ln, 43.7706, 142.3650) <= 25) return '旭川';
+    return 'それ以外';
+  }
+  var t = (n.title || '') + (n.address || '');
+  if (t.indexOf('札幌') >= 0) return '札幌';
+  if (/旭川|東川/.test(t)) return '旭川';
+  return 'それ以外';
+}
 function noteCard(n, extra) {
   var img = n.thumb || (parseJson(n.photos, []).length ? imgOf(n) : '');
   var urls = parseJson(n.urls, []);
   var title = n.title || (n.ogpStatus === 'pending' ? '取得中…' : (urls[0] ? domainLabel(urls[0]) + 'のリンク' : '（名前なし）'));
   var badges = '<span class="badge">' + esc(n.kind) + '</span><span class="badge ' + (n.status === '採用' ? 'ok' : '') + '">' + esc(n.status) + '</span>';
+  badges += '<span class="badge">📍' + noteArea(n) + '</span>';
   if (n.day) badges += '<span class="badge">' + esc(n.day.slice(5).replace('-', '/')) + '</span>';
   if (n.needsBoost) badges += '<span class="badge warn">要補強</span>';
   if (n.ogpStatus === 'pending') badges += '<span class="badge">取得中…</span>';
@@ -760,6 +776,7 @@ function viewNotes() {
   var h = '<div class="card"><div class="row">' +
     '<select data-filter="kind" aria-label="種別" class="grow">' + opt(NOTE_KINDS.map(function (k) { return [k, k]; }), f.kind, '種別：すべて') + '</select>' +
     '<select data-filter="status" aria-label="状態" class="grow">' + opt(NOTE_STATUSES.map(function (k) { return [k, k]; }), f.status, '状態：すべて') + '</select>' +
+    '<select data-filter="area" aria-label="エリア" class="grow">' + opt(AREAS.map(function (k) { return [k, k]; }), f.area, 'エリア：すべて') + '</select>' +
     '<select data-filter="day" aria-label="日" class="grow">' + opt([['none', '日：未定'], ['2026-11-22', '11/22'], ['2026-11-23', '11/23'], ['2026-11-24', '11/24']], f.day, '日：すべて') + '</select></div>' +
     '<div class="row" style="margin-top:8px"><input type="text" data-filter="q" class="grow" placeholder="言葉で探す" value="' + esc(f.q) + '" aria-label="言葉で探す">' +
     '<button class="chip' + (f.boost ? ' on' : '') + '" data-act="toggleBoost">要補強のみ</button></div></div>';
@@ -774,6 +791,7 @@ function notesFiltered() {
     if (f.day === 'none' && n.day) return false;
     if (f.day && f.day !== 'none' && n.day !== f.day) return false;
     if (f.boost && !n.needsBoost) return false;
+    if (f.area && noteArea(n) !== f.area) return false;
     if (f.q && (n.title + n.summary + n.address + n.urls).indexOf(f.q) < 0) return false;
     return true;
   }).sort(function (a, b) { return a.updatedAt < b.updatedAt ? 1 : -1; });
@@ -790,13 +808,13 @@ function viewNote(id) {
   var urls = parseJson(n.urls, []), photos = parseJson(n.photos, []);
   var h = '<div class="row"><a class="btn" href="#/notes">← 付箋ボード</a><div class="grow"></div><button class="btn primary" data-act="editNote" data-id="' + esc(n.id) + '">編集</button></div>';
   h += '<h2 style="margin-top:12px;overflow-wrap:anywhere">' + esc(n.title || '（名前なし）') + '</h2>';
-  h += '<div><span class="badge">' + esc(n.kind) + '</span><span class="badge ' + (n.status === '採用' ? 'ok' : '') + '">' + esc(n.status) + '</span>' + (n.day ? '<span class="badge">' + esc(n.day.slice(5).replace('-', '/')) + '</span>' : '') +
+  h += '<div><span class="badge">' + esc(n.kind) + '</span><span class="badge ' + (n.status === '採用' ? 'ok' : '') + '">' + esc(n.status) + '</span>' + '<span class="badge">📍' + noteArea(n) + '</span>' + (n.day ? '<span class="badge">' + esc(n.day.slice(5).replace('-', '/')) + '</span>' : '') +
     (n.needsBoost ? '<span class="badge warn">要補強</span>' : '<span class="badge ok">補強済み</span>') + '</div>';
   if (photos.length) h += '<div class="photos">' + photos.map(function (p) { return '<img alt="写真" src="https://drive.google.com/thumbnail?id=' + esc(p) + '&sz=w900">'; }).join('') + '</div>';
   else if (n.thumb) h += '<div class="photos"><img alt="写真" src="' + esc(n.thumb) + '"></div>';
   if (n.summary) h += '<p class="detail-text">' + esc(n.summary) + '</p>';
   var kv = [['住所', n.address && ('<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.address) + '" target="_blank" rel="noopener">' + esc(n.address) + '（地図）</a>')],
-    ['営業時間', esc(n.hours)], ['定休日', esc(n.closed)], ['予約', esc(n.reservation)], ['予算', esc(n.budget)], ['所要時間', esc(n.duration)]]
+    ['位置情報', hasPos(n) ? ('<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.lat + ',' + n.lng) + '" target="_blank" rel="noopener">' + esc(n.lat + ', ' + n.lng) + '（地図）</a>') : '<span class="muted">未取得</span>'], ['営業時間', esc(n.hours)], ['定休日', esc(n.closed)], ['予約', esc(n.reservation)], ['予算', esc(n.budget)], ['所要時間', esc(n.duration)]]
     .filter(function (r) { return r[1]; });
   if (kv.length) h += '<dl class="kv">' + kv.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('') + '</dl>';
   if (urls.length) h += '<h3>リンク</h3>' + urls.map(function (u) { return '<div><a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(domainLabel(u) || u) + '</a> <span class="muted">' + esc(u.slice(0, 60)) + '</span></div>'; }).join('');
@@ -819,7 +837,7 @@ function noteForm(n) {
   h += '<label class="f" for="f_day">日</label><select id="f_day"><option value="">未定</option>' + DAY_LABELS.map(function (d) { return '<option value="' + d.date + '"' + (n.day === d.date ? ' selected' : '') + '>' + d.md + '</option>'; }).join('') + '</select>';
   h += '<label class="f" for="f_urls">URL（1行に1つ）</label><textarea id="f_urls" rows="2">' + esc(urls.join('\n')) + '</textarea>';
   h += '<label class="f" for="f_summary">概要（一言で）</label><textarea id="f_summary" rows="3">' + esc(n.summary) + '</textarea>';
-  h += txt('f_address', '住所・エリア', n.address) + txt('f_hours', '営業時間', n.hours) + txt('f_closed', '定休日', n.closed) +
+  h += txt('f_address', '住所・エリア', n.address) + txt('f_pos', '位置情報（緯度, 経度）　空欄なら住所から自動で取得します', hasPos(n) ? n.lat + ', ' + n.lng : '') + txt('f_hours', '営業時間', n.hours) + txt('f_closed', '定休日', n.closed) +
     txt('f_reservation', '予約（要・不要・電話番号など）', n.reservation) + txt('f_budget', '予算', n.budget) + txt('f_duration', '所要時間（例：1時間30分）', n.duration);
   h += '<label class="f"><input type="checkbox" id="f_boost"' + (n.needsBoost ? ' checked' : '') + ' style="width:24px;height:24px;vertical-align:middle"> 要補強（Claude に調べてほしい）</label>';
   h += '<h3>写真（最大5枚）</h3><div class="photos">' + photos.map(function (p) { return '<div class="p"><img alt="写真" src="https://drive.google.com/thumbnail?id=' + esc(p) + '&sz=w600"><button class="x" data-act="rmPhoto" data-id="' + esc(n.id) + '" data-file="' + esc(p) + '" aria-label="写真を削除">✕</button></div>'; }).join('') + '</div>';
@@ -1178,11 +1196,15 @@ document.addEventListener('click', function (ev) {
     var row = { id: id, title: val('f_title'), kind: val('f_kind'), status: val('f_status'), day: val('f_day'), urls: JSON.stringify(urls), summary: val('f_summary'),
       address: val('f_address'), hours: val('f_hours'), closed: val('f_closed'), reservation: val('f_reservation'), budget: val('f_budget'), duration: val('f_duration'),
       needsBoost: document.getElementById('f_boost').checked ? '1' : '' };
-    var addrChanged = row.address !== n0.address;
-    if (addrChanged) { row.lat = ''; row.lng = ''; delete S.geoFailed[id]; }   // 住所を変えたら位置を取り直す
+    var posOld = hasPos(n0) ? n0.lat + ', ' + n0.lng : '', posNew = val('f_pos').trim(), addrChanged = row.address !== n0.address;
+    if (posNew !== posOld) {   // 位置情報の欄を直接直したとき
+      var pm = posNew && posNew.match(/^(-?d+(?:.d+)?)s*[,，、s]s*(-?d+(?:.d+)?)$/);
+      if (posNew && (!pm || Math.abs(Number(pm[1])) > 90 || Math.abs(Number(pm[2])) > 180)) { toast('位置情報は「43.77, 142.36」のように、緯度と経度を , で区切って入れてください'); return; }
+      row.lat = pm ? pm[1] : ''; row.lng = pm ? pm[2] : ''; delete S.geoFailed[id];
+    } else if (addrChanged) { row.lat = ''; row.lng = ''; delete S.geoFailed[id]; }   // 住所だけ変えたら位置を取り直す
     saveRow('notes', row, n0.updatedAt).then(function (saved) {
       S.editing = null; toast('保存しました'); render();
-      if (row.address && (addrChanged || !hasPos(saved))) geocodeNote(id).then(function () { render(); }).catch(function () { });
+      if (row.address && !hasPos(saved)) geocodeNote(id).then(function () { render(); }).catch(function () { });
     }).catch(function (e) { toast('保存できませんでした：' + (e.message || e)); });
   }
   else if (a === 'delNote') { if (confirm('この付箋を削除しますか？（予定への紐づけは外れます）')) removeRow('notes', id).then(function () { S.editing = null; location.hash = '#/notes'; }); }
