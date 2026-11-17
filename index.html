@@ -615,6 +615,15 @@ function removeRow(table, id) {
   return rpc({ action: 'remove', table: table, id: id }).then(function (r) { applyRows((function () { var o = {}; o[table] = [r.row]; return o; })()); saveCache(); });
 }
 
+// 付箋の「日」を予定に合わせる。この付箋を使う予定がほかになければ day に（予定を外したときは ''）。
+// 予定を外しても日が残ると、ほかの日の候補に出なくなるため
+function alignNoteDay(noteId, day, exceptEventId) {
+  var n = noteById(noteId);
+  if (!n || (n.day || '') === day) return Promise.resolve();
+  if (live('events').some(function (e) { return e.noteId === noteId && e.id !== exceptEventId; })) return Promise.resolve();
+  return saveRow('notes', { id: n.id, day: day }, n.updatedAt);
+}
+
 // ---------- 部品 ----------
 function imgOf(n) {
   var ph = parseJson(n.photos, []);
@@ -957,7 +966,7 @@ function mapAssign(date) {
     var n = noteById(ids[i]); i++;
     if (!n) { next(); return; }
     saveRow('events', { day: date, title: n.title || domainLabel(parseJson(n.urls, [])[0]), kind: n.kind, noteId: n.id, order: String(base + 10 * i) })
-      .then(function () { return n.day ? null : saveRow('notes', { id: n.id, day: date }, n.updatedAt); })
+      .then(function (saved) { return alignNoteDay(n.id, date, saved.id); })
       .then(next).catch(function (e) { toast('追加できませんでした：' + (e.message || e)); });
   })();
 }
@@ -1073,13 +1082,12 @@ function openEventSheet(ev, date, noteId) {
     closeSheet();
     saveRow('events', row, isNew ? undefined : ev.updatedAt).then(function (saved) {
       // 付箋を紐づけたら、付箋の「日」も合わせる
-      var n = noteById(saved.noteId);
-      if (n && !n.day) saveRow('notes', { id: n.id, day: saved.day }, n.updatedAt).then(render);
       render();
+      alignNoteDay(saved.noteId, saved.day, saved.id).then(render).catch(function () { });
     }).catch(function (e) { toast('保存できませんでした：' + (e.message || e)); });
   };
   var del = document.getElementById('e_del');
-  if (del) del.onclick = function () { if (!confirm('この予定を削除しますか？（紐づけた付箋は残ります）')) return; closeSheet(); removeRow('events', ev.id).then(render); };
+  if (del) del.onclick = function () { if (!confirm('この予定を削除しますか？（紐づけた付箋は残ります）')) return; closeSheet(); removeRow('events', ev.id).then(function () { var n = noteById(ev.noteId); return n && n.day === ev.day ? alignNoteDay(ev.noteId, '', ev.id) : null; }).then(render).catch(function (e) { toast('削除できませんでした：' + (e.message || e)); }); };
 }
 function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
 function moveEvent(id, dir) {
