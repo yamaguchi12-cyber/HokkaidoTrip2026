@@ -659,6 +659,8 @@ function weatherCard(date) {
 
 // ---------- 画面 ----------
 function render() {
+  var qa = document.activeElement;
+  if (qa && qa.dataset && qa.dataset.filter === 'q' && document.getElementById('noteList')) { applyNoteSearch(); return; }   // 検索欄に入力中は欄を作り直さない
   var route = location.hash.replace(/^#/, '').replace(/(^|[#&])t=[0-9a-f]+/, '') || '/';
   S.route = route;
   var app = document.getElementById('app');
@@ -753,7 +755,20 @@ function evCard(e, n, warns) {
 
 function viewNotes() {
   var f = S.filters;
-  var list = live('notes').filter(function (n) {
+  var list = notesFiltered();
+  var opt = function (arr, cur, blank) { return '<option value="">' + blank + '</option>' + arr.map(function (x) { return '<option value="' + esc(x[0]) + '"' + (cur === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join(''); };
+  var h = '<div class="card"><div class="row">' +
+    '<select data-filter="kind" aria-label="種別" class="grow">' + opt(NOTE_KINDS.map(function (k) { return [k, k]; }), f.kind, '種別：すべて') + '</select>' +
+    '<select data-filter="status" aria-label="状態" class="grow">' + opt(NOTE_STATUSES.map(function (k) { return [k, k]; }), f.status, '状態：すべて') + '</select>' +
+    '<select data-filter="day" aria-label="日" class="grow">' + opt([['none', '日：未定'], ['2026-11-22', '11/22'], ['2026-11-23', '11/23'], ['2026-11-24', '11/24']], f.day, '日：すべて') + '</select></div>' +
+    '<div class="row" style="margin-top:8px"><input type="text" data-filter="q" class="grow" placeholder="言葉で探す" value="' + esc(f.q) + '" aria-label="言葉で探す">' +
+    '<button class="chip' + (f.boost ? ' on' : '') + '" data-act="toggleBoost">要補強のみ</button></div></div>';
+  h += '<div id="noteList">' + notesListHtml(list) + '</div>';
+  return h;
+}
+function notesFiltered() {
+  var f = S.filters;
+  return live('notes').filter(function (n) {
     if (f.kind && n.kind !== f.kind) return false;
     if (f.status && n.status !== f.status) return false;
     if (f.day === 'none' && n.day) return false;
@@ -762,16 +777,10 @@ function viewNotes() {
     if (f.q && (n.title + n.summary + n.address + n.urls).indexOf(f.q) < 0) return false;
     return true;
   }).sort(function (a, b) { return a.updatedAt < b.updatedAt ? 1 : -1; });
-  var opt = function (arr, cur, blank) { return '<option value="">' + blank + '</option>' + arr.map(function (x) { return '<option value="' + esc(x[0]) + '"' + (cur === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join(''); };
-  var h = '<div class="card"><div class="row">' +
-    '<select data-filter="kind" aria-label="種別" class="grow">' + opt(NOTE_KINDS.map(function (k) { return [k, k]; }), f.kind, '種別：すべて') + '</select>' +
-    '<select data-filter="status" aria-label="状態" class="grow">' + opt(NOTE_STATUSES.map(function (k) { return [k, k]; }), f.status, '状態：すべて') + '</select>' +
-    '<select data-filter="day" aria-label="日" class="grow">' + opt([['none', '日：未定'], ['2026-11-22', '11/22'], ['2026-11-23', '11/23'], ['2026-11-24', '11/24']], f.day, '日：すべて') + '</select></div>' +
-    '<div class="row" style="margin-top:8px"><input type="text" data-filter="q" class="grow" placeholder="言葉で探す" value="' + esc(f.q) + '" aria-label="言葉で探す">' +
-    '<button class="chip' + (f.boost ? ' on' : '') + '" data-act="toggleBoost">要補強のみ</button></div></div>';
-  h += '<p class="muted">' + list.length + ' 枚</p>';
-  h += list.map(function (n) { return noteCard(n); }).join('') || '<p class="muted">付箋がありません。右下の「＋」から追加できます。</p>';
-  return h;
+}
+function notesListHtml(list) {
+  return '<p class="muted">' + list.length + ' 枚</p>' +
+    (list.map(function (n) { return noteCard(n); }).join('') || '<p class="muted">付箋がありません。右下の「＋」から追加できます。</p>');
 }
 
 function viewNote(id) {
@@ -1196,11 +1205,20 @@ document.addEventListener('change', function (ev) {
   if (f) { S.filters[f] = ev.target.value; render(); return; }
   if (ev.target.id === 'f_photo' && S.editing) uploadFiles(S.editing, ev.target.files);
 });
+// 検索欄：入力欄は作り直さず、一覧だけ差し替える（日本語入力の変換中に欄が消えるのを防ぐ）。変換中は何もしない
+function applyNoteSearch() {
+  var box = document.getElementById('noteList');
+  if (box) box.innerHTML = notesListHtml(notesFiltered());
+}
 document.addEventListener('input', function (ev) {
   if (ev.target.dataset && ev.target.dataset.filter === 'q') {
-    S.filters.q = ev.target.value; clearTimeout(S.qt);
-    S.qt = setTimeout(function () { var pos = ev.target.selectionStart; render(); var el = document.querySelector('[data-filter=q]'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }, 300);
+    S.filters.q = ev.target.value;
+    if (ev.isComposing) return;
+    clearTimeout(S.qt); S.qt = setTimeout(applyNoteSearch, 200);
   }
+});
+document.addEventListener('compositionend', function (ev) {
+  if (ev.target.dataset && ev.target.dataset.filter === 'q') { S.filters.q = ev.target.value; clearTimeout(S.qt); S.qt = setTimeout(applyNoteSearch, 100); }
 });
 document.getElementById('fab').onclick = function () { openQuickAdd(''); };
 document.getElementById('btnRefresh').onclick = function () { sync(true); };
