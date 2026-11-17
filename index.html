@@ -64,6 +64,10 @@ nav.tabs a.on { color: var(--accent); font-weight: 700; border-top: 3px solid va
 .tl { border-left: 3px solid var(--accent); margin: 12px 0 12px 8px; padding-left: 12px; }
 .ev { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
 .ev::before { content: ""; position: absolute; left: -22px; top: 18px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+.ev.untimed { border-style: dashed; }
+.note { position: relative; }
+.note .tt { padding-right: 40px; }
+.fav { position: absolute; top: 2px; right: 2px; min-width: 44px; min-height: 44px; border: 0; background: none; font-size: 24px; line-height: 1; cursor: pointer; color: var(--ink); }
 .ev .tm { font-weight: 700; font-variant-numeric: tabular-nums; }
 .ev .warnline { margin-top: 6px; font-size: 14px; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 4px 8px; }
 .gap { margin: 10px 0; padding: 8px 12px; border: 2px dashed var(--accent); border-radius: 12px; color: var(--accent); font-weight: 700; }
@@ -210,7 +214,89 @@ function analyzeDay(events, notesById, gapMin) {
     var end = eventEndMin(ev, note);
     prevEnd = prevEnd === null ? end : Math.max(prevEnd, end);
   });
-  return { timed: rows, untimed: untimed.map(function (ev) { return { event: ev, note: ev.noteId ? notesById[ev.noteId] || null : null }; }) };
+  var untimedRows = untimed.map(function (ev) { return { event: ev, note: ev.noteId ? notesById[ev.noteId] || null : null }; });
+  var byId = {}; rows.forEach(function (r) { byId[r.event.id] = r; }); untimedRows.forEach(function (r) { byId[r.event.id] = r; });
+  var seq = sequenceDay(events).map(function (e) { return byId[e.id]; }).filter(Boolean);   // 画面の並び（時刻未定を時刻つきの間に置く）
+  return { timed: rows, untimed: untimedRows, seq: seq };
+}
+
+// ---------- 時刻未定の予定：置き場所と、自動で決める時間 ----------
+// 画面の並び順。時刻つきは時刻順。時刻未定は order を手がかりに、order 順で直前にある時刻つき予定の次に置く
+// （直前に時刻つきがなければ先頭）。↑↓ で order を変えると、時刻つきの予定の間に動かせる
+function sequenceDay(events) {
+  var alive = events.filter(function (e) { return !isDeleted(e); });
+  var timed = sortEvents(alive.filter(function (e) { return toMin(e.start) !== null; }));
+  var byOrder = alive.slice().sort(function (a, b) {
+    return (Number(a.order) || 0) - (Number(b.order) || 0) || (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0);
+  });
+  var lead = [], after = {}, anchor = null;
+  byOrder.forEach(function (e) {
+    if (toMin(e.start) !== null) { anchor = e.id; return; }
+    if (anchor === null) lead.push(e); else (after[anchor] = after[anchor] || []).push(e);
+  });
+  var out = lead.slice();
+  timed.forEach(function (e) { out.push(e); (after[e.id] || []).forEach(function (u) { out.push(u); }); });
+  return out;
+}
+function liveEventsExcept(events, excludeId) {
+  return events.filter(function (e) { return !isDeleted(e) && e.id !== excludeId; });
+}
+// 予定 refId の「すぐ後ろ」に入る order（次に大きい order との中間。なければ +10）
+function orderAfter(events, refId, excludeId) {
+  var os = liveEventsExcept(events, excludeId), ref = os.filter(function (e) { return e.id === refId; })[0];
+  if (!ref) return os.reduce(function (m, e) { return Math.max(m, Number(e.order) || 0); }, 0) + 10;
+  var r = Number(ref.order) || 0, next = null;
+  os.forEach(function (e) { var v = Number(e.order) || 0; if (v > r && (next === null || v < next)) next = v; });
+  return next === null ? r + 10 : (r + next) / 2;
+}
+// その日の一番前に置く order
+function orderBeforeAll(events, excludeId) {
+  var os = liveEventsExcept(events, excludeId);
+  return os.length ? os.reduce(function (m, e) { return Math.min(m, Number(e.order) || 0); }, Infinity) - 10 : 10;
+}
+// その日の一番後ろ（画面の並びの最後）に置く order
+function orderAtEnd(events) {
+  var seq = sequenceDay(events);
+  return seq.length ? orderAfter(events, seq[seq.length - 1].id) : 10;
+}
+// 時刻未定の予定に入れる時間の案。前の予定の終わり（＋移動時間）から所要時間ぶん（付箋の所要時間、なければ60分）。
+// 先頭の時刻未定は、次の時刻つき予定から逆算する。onlyId を渡すとその1件だけ。
+// 返り値：{ plan: [{ id, title, start, end, over }] }  over は次の時刻つき予定と重なること
+function planAutoTimes(events, notesById, onlyId) {
+  var seq = sequenceDay(events), plan = [], pending = [], cursor = null;
+  var r5up = function (m) { return Math.ceil(m / 5) * 5; }, r5dn = function (m) { return Math.floor(m / 5) * 5; };
+  var durOf = function (e) { var n = e.noteId ? notesById[e.noteId] : null, d = n ? parseDurationMin(n.duration) : null; return d || 60; };
+  var nextTimedStart = function (i) { for (var j = i + 1; j < seq.length; j++) { var t = toMin(seq[j].start); if (t !== null) return t; } return null; };
+  seq.forEach(function (e, i) {
+    if (toMin(e.start) !== null) {
+      var en = eventEndMin(e, e.noteId ? notesById[e.noteId] : null);
+      cursor = cursor === null ? en : Math.max(cursor, en);
+      return;
+    }
+    if (onlyId && e.id !== onlyId) return;
+    if (cursor === null) { pending.push(i); return; }
+    var s = r5up(cursor + (Number(e.travelMin) || 0)), end = s + durOf(e);
+    if (end > 24 * 60 - 1) return;
+    var ns = nextTimedStart(i);
+    plan.push({ id: e.id, title: e.title, start: fromMin(s), end: fromMin(end), over: ns !== null && end > ns });
+    cursor = end;
+  });
+  if (pending.length) {
+    var first = null, fi = -1;
+    for (var k = 0; k < seq.length; k++) { if (toMin(seq[k].start) !== null) { first = seq[k]; fi = k; break; } }
+    if (first) {
+      var nextStart = toMin(first.start), nextTravel = Number(first.travelMin) || 0;
+      for (var p = pending.length - 1; p >= 0; p--) {
+        var u = seq[pending[p]], ee = r5dn(nextStart - nextTravel), ss = ee - durOf(u);
+        if (ss < 0) break;
+        plan.push({ id: u.id, title: u.title, start: fromMin(ss), end: fromMin(ee), over: false });
+        nextStart = ss; nextTravel = Number(u.travelMin) || 0;
+      }
+    }
+  }
+  var pos = {}; seq.forEach(function (e, i) { pos[e.id] = i; });
+  plan.sort(function (a, b) { return pos[a.id] - pos[b.id]; });
+  return { plan: plan };
 }
 
 // ---------- 付箋の補助 ----------
@@ -534,7 +620,7 @@ var DAY_LABELS = [
 ];
 var TRANSPORTS = ['', '飛行機', 'レンタカー', '電車', 'バス', 'タクシー', '徒歩', 'その他'];
 var TABLE_NAMES = ['notes', 'events', 'comments', 'packing', 'reservations', 'costs', 'todos', 'settings'];
-var S = { who: '', rows: {}, since: '', route: '', filters: { kind: '', status: '', day: '', area: '', boost: false, q: '' }, editing: null, busy: 0, lastSync: '' };
+var S = { who: '', rows: {}, since: '', route: '', filters: { kind: '', status: '', day: '', area: '', boost: false, fav: false, q: '' }, editing: null, busy: 0, lastSync: '' };
 TABLE_NAMES.forEach(function (t) { S.rows[t] = []; });
 
 // ---------- ストレージ（失敗しても動く） ----------
@@ -645,6 +731,17 @@ function noteArea(n) {
   if (/旭川|東川/.test(t)) return '旭川';
   return 'それ以外';
 }
+// お気に入り：コメント表に targetType='fav'・body=使う人 の行として保存する（サーバーの列は増やさない）。使う人ごとに自分のお気に入り
+function favRow(n) { return live('comments').filter(function (c) { return c.targetType === 'fav' && c.targetId === n.id && c.body === S.who; })[0]; }
+function isFav(n) { return !!favRow(n); }
+function toggleFav(id) {
+  var n = noteById(id); if (!n) return;
+  if (!S.who) { chooseWho(); return; }
+  var r = favRow(n);
+  (r ? removeRow('comments', r.id) : saveRow('comments', { targetType: 'fav', targetId: id, body: S.who })).then(render)
+    .catch(function (e) { toast('保存できませんでした：' + (e.message || e)); });
+}
+function favButton(n) { var on = isFav(n); return '<button class="fav" data-act="fav" data-id="' + esc(n.id) + '" aria-pressed="' + on + '" aria-label="' + (on ? 'お気に入りを外す' : 'お気に入りに入れる') + '">' + (on ? '★' : '☆') + '</button>'; }
 function noteCard(n, extra) {
   var img = n.thumb || (parseJson(n.photos, []).length ? imgOf(n) : '');
   var urls = parseJson(n.urls, []);
@@ -654,7 +751,7 @@ function noteCard(n, extra) {
   if (n.day) badges += '<span class="badge">' + esc(n.day.slice(5).replace('-', '/')) + '</span>';
   if (n.needsBoost) badges += '<span class="badge warn">要補強</span>';
   if (n.ogpStatus === 'pending') badges += '<span class="badge">取得中…</span>';
-  return '<a class="note k-' + esc(n.kind) + (n.status === '却下' ? ' rejected' : '') + '" href="#/note/' + esc(n.id) + '">' +
+  return '<a class="note k-' + esc(n.kind) + (n.status === '却下' ? ' rejected' : '') + '" href="#/note/' + esc(n.id) + '">' + favButton(n) +
     '<div class="ph"' + (img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '>' + (img ? '' : '写真なし') + '</div>' +
     '<div class="grow"><div class="tt">' + esc(title) + '</div><div>' + badges + '</div>' +
     (n.summary ? '<div class="sm">' + esc(n.summary) + '</div>' : '') + (extra || '') + '</div></a>';
@@ -721,7 +818,7 @@ function viewHome() {
   var open = live('todos').filter(function (t) { return t.state !== '決定'; }).length;
   var recent = [].concat(live('notes').map(function (n) { return { at: n.updatedAt, by: n.updatedBy, text: '付箋「' + (n.title || '（名前なし）') + '」', href: '#/note/' + n.id }; }),
     live('events').map(function (e) { return { at: e.updatedAt, by: e.updatedBy, text: '予定「' + e.title + '」', href: '#/day/' + (dayIndex(e.day) + 1) }; }),
-    live('comments').map(function (c) { var n = noteById(c.targetId); return { at: c.updatedAt, by: c.updatedBy, text: 'コメント（' + (n ? n.title : '') + '）', href: '#/note/' + c.targetId }; }))
+    live('comments').filter(function (c) { return c.targetType !== 'fav'; }).map(function (c) { var n = noteById(c.targetId); return { at: c.updatedAt, by: c.updatedBy, text: 'コメント（' + (n ? n.title : '') + '）', href: '#/note/' + c.targetId }; }))
     .filter(function (x) { return x.by !== '初期データ'; })
     .sort(function (a, b) { return a.at < b.at ? 1 : -1; }).slice(0, 8);
   var h = '<h2>3日間</h2>';
@@ -747,15 +844,14 @@ function viewDay(i) {
   h += '<h2 style="margin-top:12px">' + d.md + '（' + d.wd + '）' + esc(d.route) + '</h2>';
   h += weatherCard(d.date);
   h += '<div class="tl">';
-  a.timed.forEach(function (r) {
+  a.seq.forEach(function (r) {
     if (r.gapBefore) h += '<div class="gap">空き時間 ' + Math.floor(r.gapBefore / 60) + '時間' + (r.gapBefore % 60 ? (r.gapBefore % 60) + '分' : '') + '　<button class="btn small" data-act="pick" data-date="' + d.date + '">候補から選ぶ ▼</button></div>';
-    h += evCard(r.event, r.note, r.warns);
+    h += evCard(r.event, r.note, r.warns || []);
   });
-  if (!a.timed.length) h += '<div class="gap">まだ時刻の決まった予定がありません</div>';
+  if (!a.seq.length) h += '<div class="gap">まだ予定がありません</div>';
+  else if (!a.timed.length) h += '<div class="gap">時刻の決まった予定がありません</div>';
   h += '</div>';
-  if (a.untimed.length) {
-    h += '<h3>時刻未定</h3><div class="tl">' + a.untimed.map(function (r) { return evCard(r.event, r.note, []); }).join('') + '</div>';
-  }
+  if (a.untimed.length) h += '<div class="row"><button class="btn" data-act="autoTimeDay" data-date="' + d.date + '">⏱ 時刻未定の予定の時間を自動で決める</button></div><p class="muted">点線の枠は時刻未定の予定です。↑↓ で時刻つきの予定の間に動かせます。時間は「編集」で入れるか、自動で決められます。</p>';
   h += '<div class="row"><button class="btn primary" data-act="addEvent" data-date="' + d.date + '">＋ 予定を追加</button><button class="btn" data-act="pick" data-date="' + d.date + '">候補から選ぶ</button></div>';
   // この日の候補
   var linked = {}; evs.forEach(function (e) { if (e.noteId) linked[e.noteId] = 1; });
@@ -767,10 +863,11 @@ function viewDay(i) {
 }
 function evCard(e, n, warns) {
   var tm = e.start ? esc(e.start) + (e.end ? '〜' + esc(e.end) : '') : '時刻未定';
-  var h = '<div class="ev"><div class="row"><span class="tm">' + tm + '</span><span class="badge">' + esc(e.kind || 'その他') + '</span>' +
+  var untimed = !e.start;
+  var h = '<div class="ev' + (untimed ? ' untimed' : '') + '"><div class="row"><span class="tm">' + tm + '</span><span class="badge">' + esc(e.kind || 'その他') + '</span>' +
     (e.transport ? '<span class="badge">' + esc(e.transport) + (e.travelMin ? ' ' + esc(e.travelMin) + '分' : '') + '</span>' : '') + '<span class="grow"></span>' +
     '<button class="btn small" data-act="evUp" data-id="' + esc(e.id) + '" aria-label="上へ">↑</button><button class="btn small" data-act="evDown" data-id="' + esc(e.id) + '" aria-label="下へ">↓</button>' +
-    '<button class="btn small" data-act="editEvent" data-id="' + esc(e.id) + '">編集</button></div>' +
+    (untimed ? '<button class="btn small" data-act="autoTime" data-id="' + esc(e.id) + '">⏱自動</button>' : '') + '<button class="btn small" data-act="editEvent" data-id="' + esc(e.id) + '">編集</button></div>' +
     '<div style="font-weight:700;overflow-wrap:anywhere">' + esc(e.title) + (n && n.status === '採用' ? ' ⭐採用' : '') + '</div>';
   if (e.memo) h += '<div class="muted" style="overflow-wrap:anywhere">' + esc(e.memo) + '</div>';
   if (n) h += noteCard(n);
@@ -788,7 +885,7 @@ function viewNotes() {
     '<select data-filter="area" aria-label="エリア" class="grow">' + opt(AREAS.map(function (k) { return [k, k]; }), f.area, 'エリア：すべて') + '</select>' +
     '<select data-filter="day" aria-label="日" class="grow">' + opt([['none', '日：未定'], ['2026-11-22', '11/22'], ['2026-11-23', '11/23'], ['2026-11-24', '11/24']], f.day, '日：すべて') + '</select></div>' +
     '<div class="row" style="margin-top:8px"><input type="text" data-filter="q" class="grow" placeholder="言葉で探す" value="' + esc(f.q) + '" aria-label="言葉で探す">' +
-    '<button class="chip' + (f.boost ? ' on' : '') + '" data-act="toggleBoost">要補強のみ</button></div></div>';
+    '<button class="chip' + (f.boost ? ' on' : '') + '" data-act="toggleBoost">要補強のみ</button><button class="chip' + (f.fav ? ' on' : '') + '" data-act="favFilter" aria-pressed="' + !!f.fav + '">★お気に入り</button></div></div>';
   h += '<div id="noteList">' + notesListHtml(list) + '</div>';
   return h;
 }
@@ -801,6 +898,7 @@ function notesFiltered() {
     if (f.day && f.day !== 'none' && n.day !== f.day) return false;
     if (f.boost && !n.needsBoost) return false;
     if (f.area && noteArea(n) !== f.area) return false;
+    if (f.fav && !isFav(n)) return false;
     if (f.q && (n.title + n.summary + n.address + n.urls).indexOf(f.q) < 0) return false;
     return true;
   }).sort(function (a, b) { return a.updatedAt < b.updatedAt ? 1 : -1; });
@@ -815,21 +913,21 @@ function viewNote(id) {
   if (!n || isDeleted(n)) return '<p>この付箋は見つかりません。</p><a class="btn" href="#/notes">付箋ボードへ</a>';
   if (S.editing === id) return noteForm(n);
   var urls = parseJson(n.urls, []), photos = parseJson(n.photos, []);
-  var h = '<div class="row"><a class="btn" href="#/notes">← 付箋ボード</a><div class="grow"></div><button class="btn primary" data-act="editNote" data-id="' + esc(n.id) + '">編集</button></div>';
+  var h = '<div class="row"><a class="btn" href="#/notes">← 付箋ボード</a><div class="grow"></div><button class="btn" data-act="fav" data-id="' + esc(n.id) + '" aria-pressed="' + isFav(n) + '">' + (isFav(n) ? '★ お気に入り' : '☆ お気に入り') + '</button><button class="btn primary" data-act="editNote" data-id="' + esc(n.id) + '">編集</button></div>';
   h += '<h2 style="margin-top:12px;overflow-wrap:anywhere">' + esc(n.title || '（名前なし）') + '</h2>';
   h += '<div><span class="badge">' + esc(n.kind) + '</span><span class="badge ' + (n.status === '採用' ? 'ok' : '') + '">' + esc(n.status) + '</span>' + '<span class="badge">📍' + noteArea(n) + '</span>' + (n.day ? '<span class="badge">' + esc(n.day.slice(5).replace('-', '/')) + '</span>' : '') +
     (n.needsBoost ? '<span class="badge warn">要補強</span>' : '<span class="badge ok">補強済み</span>') + '</div>';
   if (photos.length) h += '<div class="photos">' + photos.map(function (p) { return '<img alt="写真" src="https://drive.google.com/thumbnail?id=' + esc(p) + '&sz=w900">'; }).join('') + '</div>';
   else if (n.thumb) h += '<div class="photos"><img alt="写真" src="' + esc(n.thumb) + '"></div>';
   if (n.summary) h += '<p class="detail-text">' + esc(n.summary) + '</p>';
-  var kv = [['住所', n.address ? ('<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.address) + '" target="_blank" rel="noopener">' + esc(n.address) + '（地図）</a>') : (hasPos(n) ? '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.lat + ',' + n.lng) + '" target="_blank" rel="noopener">地図で開く</a>' : '')],
+  var kv = [['住所', n.address ? ('<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(hasPos(n) ? n.lat + ',' + n.lng : n.address) + '" target="_blank" rel="noopener">' + esc(n.address) + '</a>') : (hasPos(n) ? '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n.lat + ',' + n.lng) + '" target="_blank" rel="noopener">地図で開く</a>' : '')],
     ['営業時間', esc(n.hours)], ['定休日', esc(n.closed)], ['予約', esc(n.reservation)], ['予算', esc(n.budget)], ['所要時間', esc(n.duration)]]
     .filter(function (r) { return r[1]; });
   if (kv.length) h += '<dl class="kv">' + kv.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('') + '</dl>';
   if (urls.length) h += '<h3>リンク</h3>' + urls.map(function (u) { return '<div><a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(domainLabel(u) || u) + '</a> <span class="muted">' + esc(u.slice(0, 60)) + '</span></div>'; }).join('');
   if (n.detail) h += '<h3>詳細資料</h3><div class="card detail-text">' + esc(n.detail) + '</div>';
   h += '<h3>コメント</h3>';
-  var cms = live('comments').filter(function (c) { return c.targetId === n.id; }).sort(function (a, b) { return a.createdAt < b.createdAt ? -1 : 1; });
+  var cms = live('comments').filter(function (c) { return c.targetType !== 'fav' && c.targetId === n.id; }).sort(function (a, b) { return a.createdAt < b.createdAt ? -1 : 1; });
   h += cms.map(function (c) { return '<div class="cm"><b>' + esc(c.createdBy) + '</b> <span class="muted">' + esc(String(c.createdAt).slice(5, 16).replace('T', ' ')) + '</span><br>' + esc(c.body) + '</div>'; }).join('') || '<p class="muted">まだコメントはありません。</p>';
   h += '<label class="f" for="cmBody">コメントを書く</label><textarea id="cmBody" rows="2"></textarea><div class="row" style="margin-top:8px"><button class="btn primary" data-act="addComment" data-id="' + esc(n.id) + '">送信</button></div>';
   h += '<div class="muted" style="margin-top:16px">作成：' + esc(n.createdBy) + ' ／ 最終更新：' + esc(n.updatedBy) + '（' + esc(String(n.updatedAt).slice(5, 16).replace('T', ' ')) + '）</div>';
@@ -965,7 +1063,7 @@ function mapAssign(date) {
     if (i >= ids.length) { S.mapSel = {}; toast(ids.length + ' 枚を ' + date.slice(5).replace('-', '/') + ' に追加しました'); render(); return; }
     var n = noteById(ids[i]); i++;
     if (!n) { next(); return; }
-    saveRow('events', { day: date, title: n.title || domainLabel(parseJson(n.urls, [])[0]), kind: n.kind, noteId: n.id, order: String(base + 10 * i) })
+    saveRow('events', { day: date, title: n.title || domainLabel(parseJson(n.urls, [])[0]), kind: n.kind, noteId: n.id, order: String(orderAtEnd(live('events').filter(function (e) { return e.day === date; }))) })
       .then(function (saved) { return alignNoteDay(n.id, date, saved.id); })
       .then(next).catch(function (e) { toast('追加できませんでした：' + (e.message || e)); });
   })();
@@ -1078,7 +1176,7 @@ function openEventSheet(ev, date, noteId) {
   noteSel.onchange = function () { var n = noteById(noteSel.value); if (n) { var t = document.getElementById('e_title'); if (!t.value) t.value = n.title; document.getElementById('e_kind').value = n.kind; } };
   document.getElementById('e_save').onclick = function () {
     var row = { id: ev.id, day: ev.day, title: val('e_title') || '（無題）', start: val('e_start'), end: val('e_end'), kind: val('e_kind'), transport: val('e_tr'), travelMin: val('e_tm'), noteId: val('e_note'), memo: val('e_memo') };
-    if (isNew) { delete row.id; var same = live('events').filter(function (e) { return e.day === ev.day; }); row.order = String(same.reduce(function (m, e) { return Math.max(m, Number(e.order) || 0); }, 0) + 10); }
+    if (isNew) { delete row.id; var same = live('events').filter(function (e) { return e.day === ev.day; }); row.order = String(row.start ? same.reduce(function (m, e) { return Math.max(m, Number(e.order) || 0); }, 0) + 10 : orderAtEnd(same)); }
     closeSheet();
     saveRow('events', row, isNew ? undefined : ev.updatedAt).then(function (saved) {
       // 付箋を紐づけたら、付箋の「日」も合わせる
@@ -1092,36 +1190,63 @@ function openEventSheet(ev, date, noteId) {
 function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
 function moveEvent(id, dir) {
   var e = live('events').filter(function (x) { return x.id === id; })[0]; if (!e) return;
-  var sorted = sortEvents(live('events').filter(function (x) { return x.day === e.day; }));
-  var i = sorted.indexOf(sorted.filter(function (x) { return x.id === id; })[0]), j = i + dir;
+  var dayEvs = live('events').filter(function (x) { return x.day === e.day; });
+  var fail = function (er) { toast('並べ替えできませんでした：' + (er.message || er)); };
+  if (toMin(e.start) === null) {   // 時刻未定：画面の並びで隣と入れ替わる（時刻つきの予定の間にも動く）
+    var seq = sequenceDay(dayEvs), i0 = seq.map(function (x) { return x.id; }).indexOf(id), j0 = i0 + dir;
+    if (i0 < 0 || j0 < 0 || j0 >= seq.length) return;
+    var ord = dir > 0 ? orderAfter(dayEvs, seq[j0].id, id) : (j0 > 0 ? orderAfter(dayEvs, seq[j0 - 1].id, id) : orderBeforeAll(dayEvs, id));
+    saveRow('events', { id: e.id, order: String(ord) }, e.updatedAt).then(render).catch(fail);
+    return;
+  }
+  var sorted = sortEvents(dayEvs.filter(function (x) { return toMin(x.start) !== null; }));
+  var i = sorted.map(function (x) { return x.id; }).indexOf(id), j = i + dir;
   if (j < 0 || j >= sorted.length) return;
   var o = sorted[j];
-  // 並びは「時刻 → order」。入れ替える2件の時刻が違うと動かないので、同じ時刻・時刻未定どうしだけ入れ替える
+  // 時刻つきの並びは「時刻 → order」。入れ替える2件の時刻が違うと動かないので、同じ時刻どうしだけ入れ替える
   if (e.start !== o.start) { toast('時刻が違う予定とは入れ替えられません。時刻を変えてください'); return; }
   var oe = Number(e.order) || 0, oo = Number(o.order) || 0;
   if (oe === oo) oo = oe + dir;
-  Promise.all([saveRow('events', { id: e.id, order: String(oo) }, e.updatedAt), saveRow('events', { id: o.id, order: String(oe) }, o.updatedAt)]).then(render)
-    .catch(function (er) { toast('並べ替えできませんでした：' + (er.message || er)); });
+  Promise.all([saveRow('events', { id: e.id, order: String(oo) }, e.updatedAt), saveRow('events', { id: o.id, order: String(oe) }, o.updatedAt)]).then(render).catch(fail);
+}
+// 時刻未定の予定に、時間を自動で入れる（onlyId があればその1件）
+function autoTimes(date, onlyId) {
+  var evs = live('events').filter(function (e) { return e.day === date; }), r = planAutoTimes(evs, notesMap(), onlyId);
+  if (!r.plan.length) { toast('時間を決められませんでした（基準になる時刻つきの予定が前後にありません）'); return; }
+  var msg = '次の時間にします（所要時間が未入力のものは60分で仮置き）。あとで「編集」から直せます。\n\n' +
+    r.plan.map(function (p) { return p.start + '〜' + p.end + '　' + p.title + (p.over ? '　⚠次の予定と重なります' : ''); }).join('\n');
+  if (!confirm(msg)) return;
+  var i = 0;
+  (function next() {
+    if (i >= r.plan.length) { toast('時間を入れました'); render(); return; }
+    var p = r.plan[i++], cur = evs.filter(function (e) { return e.id === p.id; })[0];
+    saveRow('events', { id: p.id, start: p.start, end: p.end }, cur && cur.updatedAt).then(next).catch(function (er) { toast('保存できませんでした：' + (er.message || er)); render(); });
+  })();
 }
 // 候補から選ぶ：ジャンル（種別）とエリアで絞り込める。「閉じる」は一番上（スクロールしても見える）
-function openPick(date, kind, area) {
-  kind = kind || ''; area = area || '';
+function openPick(date, kind, area, fav) {
+  kind = kind || ''; area = area || ''; fav = !!fav;
   var evs = live('events').filter(function (e) { return e.day === date; }), linked = {};
   evs.forEach(function (e) { if (e.noteId) linked[e.noteId] = 1; });
   var all = live('notes').filter(function (n) { return n.status !== '却下' && !linked[n.id] && (n.day === date || !n.day); });
-  // 件数は「もう一方の絞り込み」を掛けた数にする
-  var kc = {}, ac = {}, byArea = area ? all.filter(function (n) { return noteArea(n) === area; }) : all, byKind = kind ? all.filter(function (n) { return n.kind === kind; }) : all;
-  byArea.forEach(function (n) { kc[n.kind] = (kc[n.kind] || 0) + 1; });
-  byKind.forEach(function (n) { var a = noteArea(n); ac[a] = (ac[a] || 0) + 1; });
-  var cands = all.filter(function (n) { return (!kind || n.kind === kind) && (!area || noteArea(n) === area); });
-  var chip = function (k, a, label, num, on) {
-    return '<button class="chip' + (on ? ' on' : '') + '" data-act="pickKind" data-date="' + date + '" data-kind="' + esc(k) + '" data-area="' + esc(a) + '" aria-pressed="' + on + '">' + esc(label) + '（' + num + '）</button>';
+  // 件数は「ほかの絞り込み」を掛けた数にする
+  var okKind = function (n) { return !kind || n.kind === kind; }, okArea = function (n) { return !area || noteArea(n) === area; }, okFav = function (n) { return !fav || isFav(n); };
+  var kc = {}, ac = {}, nKind = 0, nArea = 0, nFav = 0;
+  all.forEach(function (n) {
+    if (okArea(n) && okFav(n)) { kc[n.kind] = (kc[n.kind] || 0) + 1; nKind++; }
+    if (okKind(n) && okFav(n)) { var a = noteArea(n); ac[a] = (ac[a] || 0) + 1; nArea++; }
+    if (okKind(n) && okArea(n) && isFav(n)) nFav++;
+  });
+  var cands = all.filter(function (n) { return okKind(n) && okArea(n) && okFav(n); });
+  var chip = function (k, a, f, label, num, on) {
+    return '<button class="chip' + (on ? ' on' : '') + '" data-act="pickKind" data-date="' + date + '" data-kind="' + esc(k) + '" data-area="' + esc(a) + '" data-fav="' + (f ? '1' : '') + '" aria-pressed="' + on + '">' + esc(label) + '（' + num + '）</button>';
   };
   openSheet('<div class="pk-head"><h2>候補から選ぶ</h2><button class="btn" id="pk_close">閉じる</button></div>' +
-    '<div class="chips" role="group" aria-label="ジャンル" style="margin-bottom:8px">' + chip('', area, 'すべて', byArea.length, !kind) +
-      NOTE_KINDS.filter(function (k) { return kc[k]; }).map(function (k) { return chip(k, area, k, kc[k], k === kind); }).join('') + '</div>' +
-    '<div class="chips" role="group" aria-label="エリア" style="margin-bottom:8px">' + chip(kind, '', 'エリア：すべて', byKind.length, !area) +
-      AREAS.filter(function (a) { return ac[a]; }).map(function (a) { return chip(kind, a, '📍' + a, ac[a], a === area); }).join('') + '</div>' +
+    '<div class="chips" role="group" aria-label="ジャンル" style="margin-bottom:8px">' + chip('', area, fav, 'すべて', nKind, !kind) +
+      NOTE_KINDS.filter(function (k) { return kc[k]; }).map(function (k) { return chip(k, area, fav, k, kc[k], k === kind); }).join('') + '</div>' +
+    '<div class="chips" role="group" aria-label="エリアとお気に入り" style="margin-bottom:8px">' + chip(kind, '', fav, 'エリア：すべて', nArea, !area) +
+      AREAS.filter(function (a) { return ac[a]; }).map(function (a) { return chip(kind, a, fav, '📍' + a, ac[a], a === area); }).join('') +
+      chip(kind, area, !fav, '★お気に入りのみ', nFav, fav) + '</div>' +
     (cands.map(function (n) { return noteCard(n, '<div style="margin-top:6px"><button class="btn small primary" data-act="assign" data-note="' + esc(n.id) + '" data-date="' + date + '">この日に追加</button></div>'); }).join('') || '<p class="muted">候補の付箋がありません。</p>'));
   document.getElementById('pk_close').onclick = closeSheet;
 }
@@ -1175,7 +1300,7 @@ document.addEventListener('click', function (ev) {
   else if (a === 'evUp') moveEvent(id, -1);
   else if (a === 'evDown') moveEvent(id, 1);
   else if (a === 'pick') openPick(b.dataset.date);
-  else if (a === 'pickKind') openPick(b.dataset.date, b.dataset.kind, b.dataset.area);
+  else if (a === 'pickKind') openPick(b.dataset.date, b.dataset.kind, b.dataset.area, b.dataset.fav === '1');
   else if (a === 'assign') {
     var date = b.dataset.date, n = noteById(b.dataset.note);
     closeSheet();
@@ -1201,6 +1326,10 @@ document.addEventListener('click', function (ev) {
     saveRow('todos', { id: id, state: td.state === '決定' ? '未決' : '決定' }, td.updatedAt).then(render);
   }
   else if (a === 'toggleBoost') { S.filters.boost = !S.filters.boost; render(); }
+  else if (a === 'favFilter') { S.filters.fav = !S.filters.fav; render(); }
+  else if (a === 'fav') toggleFav(id);
+  else if (a === 'autoTime') { var ae = live('events').filter(function (x) { return x.id === id; })[0]; if (ae) autoTimes(ae.day, id); }
+  else if (a === 'autoTimeDay') autoTimes(b.dataset.date);
   else if (a === 'editNote') { S.editing = id; render(); }
   else if (a === 'cancelEdit') { S.editing = null; render(); }
   else if (a === 'saveNote') {
