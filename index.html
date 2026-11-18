@@ -64,6 +64,10 @@ nav.tabs a.on { color: var(--accent); font-weight: 700; border-top: 3px solid va
 .tl { border-left: 3px solid var(--accent); margin: 12px 0 12px 8px; padding-left: 12px; }
 .ev { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
 .ev::before { content: ""; position: absolute; left: -22px; top: 18px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+.rn { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; color: #fff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; text-shadow: 0 0 2px #000, 0 0 2px #000; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.rn.sel { border-color: #000; box-shadow: 0 0 0 3px #fff, 0 1px 4px rgba(0,0,0,.6); }
+.ra { width: 18px; height: 18px; line-height: 18px; text-align: center; color: #1a73e8; font-size: 16px; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.ra-wrap, .rn-wrap { background: none; border: none; }
 .ev.untimed { border-style: dashed; }
 .ad { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .star.off { filter: grayscale(1); opacity: .45; }
@@ -1018,30 +1022,81 @@ function renderMapView() {
   }
   updateMap();
 }
+// 日別の地図：その日の予定を並び順に結ぶ（位置のある付箋だけ）
+function dayRoute(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return null;
+  var pts = [], skipped = [];
+  sequenceDay(live('events').filter(function (e) { return e.day === date; })).forEach(function (e) {
+    var n = e.noteId ? noteById(e.noteId) : null;
+    if (n && !isDeleted(n) && hasPos(n)) pts.push({ i: pts.length + 1, e: e, n: n, ll: [Number(n.lat), Number(n.lng)] });
+    else skipped.push(e);
+  });
+  return { pts: pts, skipped: skipped };
+}
+function kmBetween(a, b) {
+  var R = 6371, rad = Math.PI / 180, dLat = (b[0] - a[0]) * rad, dLng = (b[1] - a[1]) * rad;
+  var x = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function drawRoute(route, pts) {
+  var ll = route.pts.map(function (r) { return r.ll; });
+  if (ll.length > 1) L.polyline(ll, { color: '#1a73e8', weight: 4, opacity: 0.75 }).addTo(S.layer);
+  route.pts.forEach(function (r, k) {
+    pts.push(r.ll);
+    if (k > 0) {   // 区間の真ん中に進む向きの矢印
+      var a = route.pts[k - 1].ll, b = r.ll;
+      if (a[0] !== b[0] || a[1] !== b[1]) {
+        var mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], ang = Math.atan2(b[0] - a[0], (b[1] - a[1]) * Math.cos(mid[0] * Math.PI / 180)) * 180 / Math.PI;
+        L.marker(mid, { interactive: false, icon: L.divIcon({ className: 'ra-wrap', html: '<div class="ra" style="transform:rotate(' + (-ang).toFixed(0) + 'deg)">➤</div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(S.layer);
+      }
+    }
+    var sel = !!S.mapSel[r.n.id];
+    var m = L.marker(r.ll, { icon: L.divIcon({ className: 'rn-wrap', html: '<div class="rn' + (sel ? ' sel' : '') + '" style="background:' + (KIND_COLORS[r.n.kind] || '#888') + '">' + r.i + '</div>', iconSize: [28, 28], iconAnchor: [14, 14] }) });
+    m.bindTooltip(r.i + '. ' + (r.n.title || '（名前なし）'));
+    m.on('click', function () { if (S.mapSel[r.n.id]) delete S.mapSel[r.n.id]; else S.mapSel[r.n.id] = 1; updateMap(); });
+    m.addTo(S.layer);
+  });
+}
+function routePanel(route) {
+  if (!route) return '';
+  var h = '<div class="card"><b>この日の順路</b> <span class="muted">（予定の並び順。距離は直線）</span>';
+  if (!route.pts.length) return h + '<div class="muted">位置のある付箋につながった予定がありません。</div></div>';
+  var total = 0;
+  route.pts.forEach(function (r, k) {
+    var d = k > 0 ? kmBetween(route.pts[k - 1].ll, r.ll) : 0; total += d;
+    h += '<div class="row"><span class="badge">' + r.i + '</span><span class="grow">' + esc((r.e.start ? r.e.start + ' ' : '') + (r.n.title || '')) + '</span>' + (k > 0 ? '<span class="muted">' + (d < 0.1 ? '同じ場所' : d.toFixed(1) + ' km') + '</span>' : '') + '</div>';
+  });
+  h += '<div class="muted" style="margin-top:6px">合計 約' + total.toFixed(1) + ' km（直線の合計。実際の道のりはもっと長い）</div>';
+  if (route.skipped.length) h += '<div class="muted">位置がなく線に入らない予定：' + esc(route.skipped.map(function (e) { return e.title || ''; }).join('、')) + '</div>';
+  return h + '</div>';
+}
 function updateMap() {
   var chips = [['', 'すべて'], ['2026-11-22', '11/22'], ['2026-11-23', '11/23'], ['2026-11-24', '11/24'], ['none', '日未定']];
   var box = document.getElementById('mapDays');
   if (box) box.innerHTML = chips.map(function (c) { return '<button class="chip' + (S.mapDay === c[0] ? ' on' : '') + '" data-act="mapDay" data-day="' + c[0] + '">' + c[1] + '</button>'; }).join('');
-  var shown = live('notes').filter(mapVisible);
+  var shown = live('notes').filter(mapVisible), route = dayRoute(S.mapDay), routeIds = {};
+  if (route) route.pts.forEach(function (r) { routeIds[r.n.id] = 1; });
   if (S.map && S.layer) {
     S.layer.clearLayers();
     var pts = [];
     shown.forEach(function (n) {
+      if (routeIds[n.id]) return;   // 順路に入るものは番号つきで描く
       var sel = !!S.mapSel[n.id], ll = [Number(n.lat), Number(n.lng)]; pts.push(ll);
       var m = L.circleMarker(ll, { radius: sel ? 13 : 9, color: sel ? '#000' : '#fff', weight: sel ? 4 : 2, fillColor: KIND_COLORS[n.kind] || '#888', fillOpacity: 0.95 });
       m.bindTooltip(n.title || '（名前なし）');
       m.on('click', function () { if (S.mapSel[n.id]) delete S.mapSel[n.id]; else S.mapSel[n.id] = 1; updateMap(); });
       m.addTo(S.layer);
     });
+    if (route) drawRoute(route, pts);
     if (!S.fitted && pts.length) { S.map.invalidateSize(); S.map.fitBounds(pts, { padding: [30, 30], maxZoom: 13 }); S.fitted = true; }
   }
   var panel = document.getElementById('mapPanel'); if (!panel) return;
   var selIds = Object.keys(S.mapSel).filter(function (id) { var n = noteById(id); return n && !isDeleted(n); });
-  var h = '';
+  var h = routePanel(route);
   if (selIds.length) {
     h += '<div class="card"><b>選んだ付箋 ' + selIds.length + ' 枚</b>' + selIds.map(function (id) { var n = noteById(id); return '<div class="row"><a class="grow" href="#/note/' + esc(n.id) + '">' + esc(n.title || '（名前なし）') + '</a><span class="badge">' + esc(n.kind) + '</span><button class="btn small" data-act="mapUnsel" data-id="' + esc(n.id) + '" aria-label="選択を外す">✕</button></div>'; }).join('') +
       '<div class="muted" style="margin-top:6px">この日に追加（時刻は日別ページで決めます）</div><div class="row">' + DAY_LABELS.map(function (d) { return '<button class="btn small primary" data-act="mapAssign" data-date="' + d.date + '">' + d.md + '</button>'; }).join('') + '</div></div>';
-  } else if (!shown.length) h += '<p class="muted">位置のある付箋がありません。付箋に住所を入れると、位置を取得できます。</p>';
+  } else if (!shown.length && !(route && route.pts.length)) h += '<p class="muted">位置のある付箋がありません。付箋に住所を入れると、位置を取得できます。</p>';
   var need = live('notes').filter(function (n) { return n.status !== '却下' && !hasPos(n) && n.address && !S.geoFailed[n.id]; });
   var noAddr = live('notes').filter(function (n) { return n.status !== '却下' && !hasPos(n) && !n.address; }).length;
   if (need.length) h += '<div class="card"><b>位置が未取得の付箋 ' + need.length + ' 枚</b><div class="muted">住所はあるが位置がまだありません。</div><div style="margin-top:6px"><button class="btn small primary" data-act="geoAll">住所から位置を取得</button></div></div>';
