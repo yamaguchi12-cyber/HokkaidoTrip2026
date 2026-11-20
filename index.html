@@ -77,6 +77,30 @@ nav.tabs a.on { color: var(--accent); font-weight: 700; border-top: 3px solid va
 .ev .tm { font-weight: 700; font-variant-numeric: tabular-nums; }
 .ev .warnline { margin-top: 6px; font-size: 14px; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 4px 8px; }
 .gap { margin: 10px 0; padding: 8px 12px; border: 2px dashed var(--accent); border-radius: 12px; color: var(--accent); font-weight: 700; }
+/* 旅のしおり */
+.shiori-btn { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 12px 16px; border-radius: 14px; border: 0; background: var(--accent); color: var(--accent-ink); font-size: 18px; font-weight: 700; text-decoration: none; margin: 4px 0 12px; }
+.shiori-btn small { display: block; font-size: 13px; font-weight: 400; opacity: .9; }
+.shiori h1 { font-size: 22px; margin: 8px 0 2px; line-height: 1.4; }
+.shiori h2 { border-bottom: 2px solid var(--accent); padding-bottom: 4px; margin-top: 28px; }
+.shiori .sd { border-left: 4px solid var(--accent); padding: 4px 0 4px 12px; margin: 14px 0; break-inside: avoid; }
+.shiori .sd .t { font-weight: 700; font-variant-numeric: tabular-nums; }
+.shiori .sd .t.u { color: var(--muted); font-weight: 400; }
+.shiori .sd .ttl { font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
+.shiori .sd .info { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.shiori .sd .info b { color: var(--ink); font-weight: 600; }
+.shiori table { border-collapse: collapse; width: 100%; font-size: 15px; }
+.shiori th { white-space: nowrap; width: 1%; }
+.shiori td, .shiori th { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.shiori .wxl { font-size: 15px; margin: 4px 0; }
+.shiori .ck { list-style: none; padding: 0; margin: 0; columns: 2; }
+.shiori .ck li { break-inside: avoid; padding: 2px 0; }
+@media print {
+  header.top, nav.tabs, .fab, .noprint { display: none !important; }
+  body { padding-bottom: 0 !important; background: #fff; color: #000; }
+  main { max-width: none; padding: 0; }
+  .shiori a { color: inherit; text-decoration: none; }
+  .shiori h2 { break-after: avoid; }
+}
 /* 入力 */
 label.f { display: block; margin: 12px 0 4px; font-size: 14px; color: var(--muted); }
 input[type=text], input[type=url], input[type=time], input[type=number], select, textarea { width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
@@ -807,6 +831,7 @@ function render() {
   else if (view === 'note') { html = viewNote(parts[2]); title = '付箋'; }
   else if (view === 'more') { html = viewMore(parts[2]); title = (LISTS[parts[2]] && LISTS[parts[2]].title) || 'その他'; }
   else if (view === 'map') { html = null; title = '地図'; }
+  else if (view === 'shiori') { html = viewShiori(); title = '旅のしおり'; }
   else { html = viewHome(); }
   document.getElementById('ttl').textContent = title;
   if (html === null) { renderMapView(); renderTabs('more'); return; }   // 地図は作り直さず、ピンだけ更新する
@@ -832,7 +857,8 @@ function viewHome() {
     live('comments').filter(function (c) { return c.targetType !== 'fav'; }).map(function (c) { var n = noteById(c.targetId); return { at: c.updatedAt, by: c.updatedBy, text: 'コメント（' + (n ? n.title : '') + '）', href: '#/note/' + c.targetId }; }))
     .filter(function (x) { return x.by !== '初期データ'; })
     .sort(function (a, b) { return a.at < b.at ? 1 : -1; }).slice(0, 8);
-  var h = '<h2>3日間</h2>';
+  var h = '<a class="shiori-btn" href="#/shiori"><span aria-hidden="true" style="font-size:28px">📖</span><span>旅のしおりを開く<small>日程・天気・予約・持ち物をひとまとめに（印刷もできます）</small></span></a>';
+  h += '<h2 style="margin-top:8px">3日間</h2>';
   DAY_LABELS.forEach(function (d, i) {
     var evs = live('events').filter(function (e) { return e.day === d.date; });
     h += '<a class="card" style="display:block;text-decoration:none;color:inherit" href="#/day/' + (i + 1) + '"><b>' + d.md + '（' + d.wd + '）</b> ' + esc(d.route) +
@@ -844,6 +870,70 @@ function viewHome() {
   h += recent.length ? recent.map(function (r) { return '<a class="card" style="display:block;text-decoration:none;color:inherit" href="' + r.href + '">' + esc(r.text) + '<div class="muted">' + esc(r.by) + '・' + esc(String(r.at).slice(5, 16).replace('T', ' ')) + '</div></a>'; }).join('') : '<p class="muted">まだ更新はありません。右下の「＋」から付箋を追加できます。</p>';
   h += '<p class="muted">更新は45秒ごとに自動で取り込みます。</p><div class="row"><button class="btn" data-act="who">使う人：' + esc(S.who || '未選択') + '（変更）</button></div>';
   return h;
+}
+
+// ---------- 旅のしおり（現状の予定を読み物としてまとめる。印刷もできる） ----------
+function shioriWx(date) {
+  var w = parseWeather(weatherRaw(date)), h = '';
+  w.places.forEach(function (p) {
+    if (!p.label && !p.msg) return;
+    h += '<div class="wxl">' + (p.label ? weatherIcons(p.label) + ' ' : '') + '<b>' + esc(p.name || '') + '</b> ' + esc(p.label || p.msg || '') +
+      (p.max !== undefined && p.max !== '' ? '　' + esc(p.max) + '/' + esc(p.min) + '℃' : '') + (p.pop !== undefined && p.pop !== '' ? '　降水確率 ' + esc(p.pop) + '%' : '') +
+      (p.sunrise ? '　🌅' + esc(p.sunrise) + ' 🌇' + esc(p.sunset || '') : '') + '</div>';
+  });
+  if (h && w.src) h += '<div class="muted">' + esc(w.src) + '</div>';
+  var ns = w.notes.filter(function (n) { return !/計算値/.test(n); });
+  return h + ns.map(function (n) { return '<div class="info">・' + esc(n) + '</div>'; }).join('');
+}
+function viewShiori() {
+  var nm = notesMap();
+  var h = '<div class="shiori"><div class="row noprint"><a class="btn" href="#/">← ホーム</a><div class="grow"></div><button class="btn" data-act="print">🖨 印刷・PDF</button></div>';
+  h += '<h1>北海道旅行2026 旅のしおり</h1><div class="muted">2026年11月22日（日）〜24日（火）／宏樹・碧依　／　最新の予定を自動でまとめています' + (S.lastSync ? '（' + esc(String(S.lastSync).slice(5, 16).replace('T', ' ')) + ' 時点）' : '') + '</div>';
+  // 全体の流れ
+  h += '<h2>全体の流れ</h2><table><tbody>';
+  DAY_LABELS.forEach(function (d, i) {
+    var stay = listRows('reservations').filter(function (r) { var m = /[0-9]+[/][0-9]+/.exec(r.datetime || ''); return r.kind === '宿' && m && m[0] === d.md; }).map(function (r) { return r.name; });
+    h += '<tr><th><a href="#/day/' + (i + 1) + '">' + d.md + '（' + d.wd + '）</a></th><td>' + esc(d.route) + (stay.length ? '<div class="info">🏨 ' + esc(stay.join('、')) + '</div>' : '') + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  // 予約・手配
+  var rs = listRows('reservations');
+  h += '<h2>予約・手配</h2>';
+  h += rs.length ? '<table><tbody>' + rs.map(function (r) { return '<tr><th>' + esc(r.kind) + '</th><td><b>' + esc(r.name) + '</b>' + (r.datetime ? '<div class="info">' + esc(r.datetime) + '</div>' : '') + (r.memo ? '<div class="info">' + esc(r.memo) + '</div>' : '') + '</td></tr>'; }).join('') + '</tbody></table>' : '<p class="muted">まだ登録がありません。</p>';
+  // 日ごと
+  DAY_LABELS.forEach(function (d) {
+    var a = analyzeDay(live('events').filter(function (e) { return e.day === d.date; }), nm, 90);
+    h += '<h2>' + d.md + '（' + d.wd + '）　' + esc(d.route) + '</h2>' + shioriWx(d.date);
+    if (!a.seq.length) h += '<p class="muted">まだ予定がありません。</p>';
+    var seen = {};   // 同じ付箋の詳細は、その日の最初の予定にだけ出す
+    a.seq.forEach(function (r) {
+      var e = r.event, n = r.note;
+      h += '<div class="sd"><div class="t' + (e.start ? '' : ' u') + '">' + (e.start ? esc(e.start) + (e.end ? '〜' + esc(e.end) : '') : '時刻未定') + '　<span class="badge">' + esc(e.kind || 'その他') + '</span>' +
+        (e.transport ? '<span class="badge">' + esc(e.transport) + (e.travelMin ? ' ' + esc(e.travelMin) + '分' : '') + '</span>' : '') + '</div>' +
+        '<div class="ttl">' + esc(e.title) + '</div>';
+      if (e.memo) h += '<div class="info">' + esc(e.memo) + '</div>';
+      if (n && !seen[n.id]) {
+        seen[n.id] = 1;
+        var kv = [], hl = (n.kind === '移動' || n.kind === '宿') ? '時間' : '営業';
+        if (n.address) kv.push('📍 <a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(hasPos(n) ? n.lat + ',' + n.lng : n.address) + '" target="_blank" rel="noopener">' + esc(n.address) + '</a>');
+        if (n.hours) kv.push('<b>' + hl + '</b> ' + esc(n.hours));
+        if (n.closed) kv.push('<b>休み</b> ' + esc(n.closed));
+        if (n.reservation) kv.push('<b>予約</b> ' + esc(n.reservation));
+        if (n.budget) kv.push('<b>予算</b> ' + esc(n.budget));
+        if (n.duration) kv.push('<b>所要</b> ' + esc(n.duration));
+        if (n.summary) h += '<div class="info">' + esc(n.summary) + '</div>';
+        kv.forEach(function (x) { h += '<div class="info">' + x + '</div>'; });
+      }
+      (r.warns || []).forEach(function (w) { h += '<div class="info">⚠ ' + esc(w) + '</div>'; });
+      h += '</div>';
+    });
+  });
+  // 持ち物・未決事項
+  var pk = listRows('packing');
+  h += '<h2>持ち物</h2>' + (pk.length ? '<ul class="ck">' + pk.map(function (r) { return '<li>' + (r.done ? '☑' : '☐') + ' ' + esc(r.item) + (r.owner && r.owner !== '共通' ? '（' + esc(r.owner) + '）' : '') + '</li>'; }).join('') + '</ul>' : '<p class="muted">まだ登録がありません。</p>');
+  var td = listRows('todos').filter(function (t) { return t.state !== '決定'; });
+  if (td.length) h += '<h2>まだ決まっていないこと</h2><ul>' + td.map(function (t) { return '<li>' + esc(t.text) + (t.day ? '（' + esc(dayShort(t.day)) + '）' : '') + '</li>'; }).join('') + '</ul>';
+  return h + '<p class="muted" style="margin-top:24px">予定を変えると、このしおりも自動で変わります。印刷・PDFは上のボタンから。</p></div>';
 }
 
 function viewDay(i) {
@@ -1370,6 +1460,7 @@ document.addEventListener('click', function (ev) {
     document.getElementById('e_title').value = n.title || domainLabel(parseJson(n.urls, [])[0]);
     document.getElementById('e_kind').value = n.kind;
   }
+  else if (a === 'print') { window.print(); }
   else if (a === 'weather') {
     var wd = parseWeather(weatherRaw(b.dataset.date)), v = prompt('注意・メモ（複数あるときは「／」で区切る。例：路面凍結に注意／冬用タイヤ）', wd.notes.join('／'));
     if (v === null) return;
